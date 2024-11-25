@@ -1,9 +1,11 @@
 const path = require('path');
+const CopyWebpackPlugin = require('copy-webpack-plugin');
+const HtmlWebpackPlugin = require('html-webpack-plugin');
 const Dotenv = require('dotenv-webpack');
 const TerserPlugin = require('terser-webpack-plugin');
 const CssMinimizerPlugin = require('css-minimizer-webpack-plugin');
+const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const webpack = require('webpack');
-const CopyWebpackPlugin = require('copy-webpack-plugin');
 
 module.exports = {
   mode: process.env.NODE_ENV === 'production' ? 'production' : 'development',
@@ -13,7 +15,7 @@ module.exports = {
     options: './src/pages/options/index.tsx',
     'temp-data': './src/pages/temp-data/index.tsx',
     background: './src/background/index.ts',
-    contentScript: './src/contentScript/index.ts',
+    contentScript: './src/contentScript/index.ts'
   },
   output: {
     path: path.resolve(__dirname, 'dist'),
@@ -38,12 +40,22 @@ module.exports = {
       {
         test: /\.css$/,
         use: [
-          'style-loader',
-          'css-loader',
+          MiniCssExtractPlugin.loader,
           {
-            loader: 'postcss-loader'
+            loader: 'css-loader',
+            options: {
+              importLoaders: 1
+            }
           },
+          'postcss-loader'
         ],
+      },
+      {
+        test: /\.(png|jpg|jpeg|gif|svg)$/,
+        type: 'asset/resource',
+        generator: {
+          filename: 'assets/[name][ext]'
+        }
       },
     ],
   },
@@ -114,6 +126,9 @@ module.exports = {
     },
   },
   plugins: [
+    new MiniCssExtractPlugin({
+      filename: '[name].css',
+    }),
     new Dotenv({
       systemvars: true,
       safe: true,
@@ -121,8 +136,6 @@ module.exports = {
     }),
     new webpack.ProvidePlugin({
       Buffer: ['buffer', 'Buffer'],
-    }),
-    new webpack.ProvidePlugin({
       process: 'process/browser',
     }),
     new webpack.IgnorePlugin({
@@ -130,12 +143,45 @@ module.exports = {
     }),
     new CopyWebpackPlugin({
       patterns: [
-        { from: 'src/manifest.json', to: '' }, // manifest.json 복사
-        { from: 'src/assets', to: 'assets' }, // 필요 시 추가 리소스 복사
+        {
+          from: "manifest.json",
+          to: "manifest.json",
+          transform(content) {
+            return Buffer.from(JSON.stringify({
+              ...JSON.parse(content.toString()),
+              version: process.env.npm_package_version,
+            }, null, 2));
+          },
+        },
+        {
+          from: "public/icons",
+          to: "icons",
+        },
+        {
+          from: "src/styles/global.css",
+          to: "contentStyle.css"
+        }
       ],
+    }),
+    new HtmlWebpackPlugin({
+      template: './public/popup.html',
+      filename: 'popup.html',
+      chunks: ['popup'],
+    }),
+    new HtmlWebpackPlugin({
+      template: './public/options.html',
+      filename: 'options.html',
+      chunks: ['options'],
+    }),
+    new HtmlWebpackPlugin({
+      template: './public/temp-data.html',
+      filename: 'temp-data.html',
+      chunks: ['temp-data'],
     }),
   ],
   performance: {
     hints: process.env.NODE_ENV === 'production' ? 'warning' : false,
+    maxEntrypointSize: 2048000,
+    maxAssetSize: 2048000
   },
 };
