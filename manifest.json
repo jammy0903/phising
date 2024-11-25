@@ -1,0 +1,81 @@
+{
+  "manifest_version": 3,
+  "name": "Anti-Phishing Shield",
+  "version": "1.0.0",
+  "description": "AI 기반 피싱 탐지 도구",
+  "author": "jammy",
+
+  "permissions": [
+    "tabs",
+    "storage",
+    "activeTab",
+    "scripting",
+    "notifications",
+    "webRequest",
+    "alarms",
+    "declarativeNetRequest",
+    "contextMenus",
+    "https://urlhaus-api.abuse.ch/*"
+  ],
+
+  "host_permissions": [
+    "https://www.dnsbl.info/*",
+    "https://api.odcloud.kr/*",
+    "https://urlhaus-api.abuse.ch/"
+  ],
+
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "public/icons/icon16.svg",
+      "48": "public/icons/icon48.svg",
+      "128": "public/icons/icon128.svg"
+    },
+    "default_title": "Anti-Phishing Shield"
+  },
+
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+
+  "content_scripts": [
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": ["contentScript.js"],
+      "css": ["styles/global.css"],
+      "run_at": "document_start"
+    }
+  ],
+
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "public/icons/*.svg",
+        "public/icons/*.png",
+        "styles/*",
+        "dist/*",
+        "styles/*",
+        "vendor/*"
+
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ],
+
+  "icons": {
+    "16": "public/icons/icon16.svg",
+    "48": "public/icons/icon48.svg",
+    "128": "public/icons/icon128.svg"
+  },
+
+  "externally_connectable": {
+    "matches": [
+      "https://www.dnsbl.info/*",
+      "https://api.odcloud.kr/*"
+    ]
+  }
+}

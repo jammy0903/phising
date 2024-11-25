@@ -1,0 +1,15 @@
+<!-- 4. 임시 이메일 아이콘 -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+    <g id="temp-email-icon">
+        <rect x="6" y="12" width="36" height="24" rx="2" fill="#60A5FA" />
+        <path d="M6 14L24 26L42 14"
+              stroke="white"
+              stroke-width="2"
+              fill="none"/>
+        <circle cx="38" cy="36" r="8" fill="#2563EB" />
+        <path d="M34 36H42M38 32V40"
+              stroke="white"
+              stroke-width="2"
+              stroke-linecap="round"/>
+    </g>
+</svg>

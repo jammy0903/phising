@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" preserveAspectRatio="none" viewBox="0 0 128 128">
+    <!-- Base Shield -->
+    <path d="M64 8 L120 32 L120 64 C120 96 96 120 64 120 C32 120 8 96 8 64 L8 32 L64 8Z"
+          fill="#4F46E5" stroke="#312E81" stroke-width="4"/>
+
+    <!-- Lock Body -->
+    <rect x="44" y="52" width="40" height="36"
+          rx="4" fill="#818CF8"/>
+
+    <!-- Lock Shackle -->
+    <path d="M52 52 L52 40 C52 29 76 29 76 40 L76 52"
+          fill="none" stroke="#818CF8" stroke-width="8" stroke-linecap="round"/>
+
+    <!-- Eye -->
+    <circle cx="64" cy="70" r="8" fill="#312E81"/>
+
+    <!-- Scanning Line Animation -->
+    <line x1="44" y1="70" x2="84" y2="70"
+          stroke="#312E81" stroke-width="2" stroke-dasharray="2,2">
+        <animate attributeName="y1" values="60;80;60" dur="2s" repeatCount="indefinite"/>
+        <animate attributeName="y2" values="60;80;60" dur="2s" repeatCount="indefinite"/>
+    </line>
+</svg>

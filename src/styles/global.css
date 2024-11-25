@@ -1,0 +1,133 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-primary: rgb(37, 99, 235);         /* blue-600 */
+    --color-secondary: rgb(156, 163, 175);    /* gray-400 */
+    --color-success: rgb(34, 197, 94);         /* green-500 */
+    --color-warning: rgb(234, 179, 8);        /* yellow-500 */
+    --color-danger: rgb(239, 68, 68);         /* red-500 */
+  }
+
+  body {
+    @apply antialiased text-gray-900 bg-white;
+  }
+}
+
+@layer components {
+  /* 로딩 컴포넌트 */
+  .spinner {
+    @apply animate-spin h-5 w-5 text-blue-600 duration-700;
+  }
+
+  /* 버튼 컴포넌트 */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded font-medium
+    transition duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2;
+  }
+
+  .btn-primary {
+    @apply btn bg-blue-600 text-white
+    hover:bg-blue-700
+    disabled:bg-blue-300 disabled:cursor-not-allowed
+    focus:ring-blue-500;
+  }
+
+  .btn-secondary {
+    @apply btn border border-gray-300 bg-white text-gray-700
+    hover:bg-gray-50
+    disabled:bg-gray-100 disabled:cursor-not-allowed
+    focus:ring-gray-500;
+  }
+
+  /* 카드 컴포넌트 */
+  .card {
+    @apply p-4 bg-white border border-gray-200 rounded-lg shadow-sm
+    transition duration-200 ease-in-out;
+  }
+
+  .card-hover {
+    @apply hover:shadow-md hover:border-gray-300;
+  }
+
+  /* 입력 필드 */
+  .input-field {
+    @apply w-full px-3 py-2 border border-gray-300 rounded-md
+    focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
+    disabled:bg-gray-100 disabled:cursor-not-allowed
+    placeholder:text-gray-400;
+  }
+
+  /* 상태 뱃지 */
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .badge-success {
+    @apply badge bg-green-100 text-green-800;
+  }
+
+  .badge-warning {
+    @apply badge bg-yellow-100 text-yellow-800;
+  }
+
+  .badge-danger {
+    @apply badge bg-red-100 text-red-800;
+  }
+
+  /* 알림 컴포넌트 */
+  .alert {
+    @apply p-4 rounded-lg border;
+  }
+
+  .alert-success {
+    @apply alert bg-green-50 border-green-200 text-green-800;
+  }
+
+  .alert-warning {
+    @apply alert bg-yellow-50 border-yellow-200 text-yellow-800;
+  }
+
+  .alert-danger {
+    @apply alert bg-red-50 border-red-200 text-red-800;
+  }
+
+  /* 데이터 목록 */
+  .list-item {
+    @apply flex items-center gap-3 p-3 hover:bg-gray-50 rounded-lg
+    transition duration-150 ease-in-out;
+  }
+
+  /* 모달 */
+  .modal-overlay {
+    @apply fixed inset-0 bg-black bg-opacity-50 z-40;
+  }
+
+  .modal-content {
+    @apply fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
+    bg-white rounded-lg shadow-xl z-50 p-6 max-w-lg w-full;
+  }
+}
+
+/* 유틸리티 애니메이션 */
+@layer utilities {
+  .animate-fade-in {
+    animation: fadeIn 0.2s ease-in-out;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.3s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes slideUp {
+    from { transform: translateY(10px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+}
