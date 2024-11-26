@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shield, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
+import {  AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 import { DetailResult } from '@utils/api/types';
 type Status = 'safe' | 'warning' | 'danger';
 

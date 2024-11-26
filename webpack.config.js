@@ -7,7 +7,7 @@ const CssMinimizerPlugin = require('css-minimizer-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const webpack = require('webpack');
 
-
+/*
 class BuildInfoPlugin {
   apply(compiler) {
     compiler.hooks.afterEmit.tapAsync('BuildInfoPlugin', (compilation, callback) => {
@@ -32,6 +32,9 @@ class BuildInfoPlugin {
   }
 }
 
+
+ */
+
 class ManifestUpdatePlugin {
   apply(compiler) {
     compiler.hooks.afterEmit.tapAsync('ManifestUpdatePlugin', (compilation, callback) => {
@@ -44,6 +47,7 @@ class ManifestUpdatePlugin {
         const assets = Object.keys(compilation.assets);
         const popupFile = assets.find(f => f.startsWith('popup-') && f.endsWith('.html'));
         const optionsFile = assets.find(f => f.startsWith('options-') && f.endsWith('.html'));
+        const analysisFile = assets.find(f => f.startsWith('analysis-') && f.endsWith('.html'));
 
         if (fs.existsSync(manifestPath)) {
           const manifest = JSON.parse(fs.readFileSync(manifestPath));
@@ -55,6 +59,18 @@ class ManifestUpdatePlugin {
           if (optionsFile) {
             manifest.options_page = optionsFile;
           }
+          if (analysisFile) {
+            manifest.analysis_page = analysisFile;
+
+          fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+        }
+          if (!manifest.web_accessible_resources) {
+            manifest.web_accessible_resources = [];
+          }
+          manifest.web_accessible_resources.push({
+            resources: [analysisFile].filter(Boolean),
+            matches: ["<all_urls>"]
+          });
 
           fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
         }
@@ -67,6 +83,7 @@ class ManifestUpdatePlugin {
     });
   }
 }
+
 
 const pages = {
   popup: {
@@ -213,10 +230,9 @@ module.exports = {
           from: 'src/styles',
           to: 'styles',
         },
-        { from: "public/build-info.json", to: "build-info.json"}
       ],
     }),
-    new ManifestUpdatePlugin(),new BuildInfoPlugin()
+    new ManifestUpdatePlugin()
   ],
   optimization: {
     minimize: process.env.NODE_ENV === 'production',
