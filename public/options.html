@@ -1,3 +1,4 @@
+<!-- options.html -->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -7,16 +8,19 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
-    <!-- Tailwind CSS -->
-    <link href="../src/styles/global.css" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Noto Sans KR', sans-serif;
+        }
+        #root {
+            width: 100%;
+            min-height: 100vh;
+        }
+    </style>
 </head>
 <body>
 <div id="root"></div>
-<!-- React DevTools -->
-<script src="/vendor/react-devtools.js"></script>
-<!-- Main bundle -->
-<script src="/options.js"></script>
-<!-- ContentScript bundle -->
-<script src="/contentScript.js"></script>
 </body>
 </html>

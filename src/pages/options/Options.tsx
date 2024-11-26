@@ -11,10 +11,10 @@ interface SubscriptionInfo {
 const Options: React.FC = () => {
   // 상태 관리
   const [isLoggedIn, setIsLoggedIn] = React.useState<boolean>(false);
-  const [subscriptionInfo, setSubscriptionInfo] = React.useState<SubscriptionInfo>({
+  const [subscriptionInfo] = React.useState<SubscriptionInfo>({
     type: 'free'
   });
-  const [isTempDataModalOpen, setIsTempDataModalOpen] = React.useState(false);
+  const [isTempDataModalOpen, setIsATempDataModalOpen] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
   const [selectedDuration, setSelectedDuration] = React.useState<DurationType>('ONE_HOUR');
   const [error, setError] = React.useState<string | null>(null);
