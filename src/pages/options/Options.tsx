@@ -21,11 +21,11 @@ const Options: React.FC = () => {
 
   // 핸들러 함수들
   const handleLogin = React.useCallback(() => {
-    window.open('https://your-auth-url.com', '_blank', 'noopener,noreferrer');
+    window.open('https://myaccount.google.com/', '_blank', 'noopener,noreferrer');
   }, []);
 
   const handleSubscriptionChange = React.useCallback(() => {
-    window.open('https://your-subscription-url.com', '_blank', 'noopener,noreferrer');
+    window.open('https://myaccount.google.com/', '_blank', 'noopener,noreferrer');
   }, []);
 
   const handleLogout = React.useCallback(() => {

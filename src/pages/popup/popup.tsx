@@ -241,7 +241,7 @@ const PopupUI = () => {
 
         {/* Detailed Analysis Button */}
         <button
-            onClick={() => chrome.tabs.create({url: 'options.html'})}
+            onClick={() => chrome.tabs.create({url: 'analysis.html'})}
             className="mt-2 w-full p-2 rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 text-white font-medium hover:from-blue-600 hover:to-blue-700"
         >
           자세히 보기

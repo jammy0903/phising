@@ -74,11 +74,21 @@ export interface CompanyDetails {
 
 // 도메인/URL 분석 관련
 export interface URLHausResponse {
+    url_info: {
+        url: string;
+        status: string;
+    }
     query_status: string;
     threat?: string;
     status?: string;
+    id: string;
 }
 
+export interface URLHausError {
+    query_status: "no_results" | "invalid_url" | "error";
+    error_message:string;
+}
+type URLHausResult = ApiResponse<URLHausResponse | URLHausError>;
 export interface SafeBrowsingResponse {
     matches?: Array<{
         threatType: string;

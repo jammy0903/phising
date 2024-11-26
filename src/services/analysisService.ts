@@ -80,7 +80,7 @@ export class DomainAnalysisService {
 
   private async checkURLhaus(url: string): Promise<ApiResponse<URLHausResponse>> {
     try {
-      return await makeRequest<URLHausResponse>(API_CONFIG.URLHAUS_ENDPOINT, {
+      return await makeRequest<URLHausResponse>(API_CONFIG.URLHAUSENDPOINT, {
         method: 'POST',
         headers: {
           'API-Key': this.apiKey,

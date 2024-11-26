@@ -22,12 +22,15 @@ class ManifestUpdatePlugin {
 
         if (fs.existsSync(manifestPath)) {
           const manifest = JSON.parse(fs.readFileSync(manifestPath));
+
+          // 실제 생성된 파일 이름으로 업데이트
           if (popupFile) {
             manifest.action.default_popup = popupFile;
           }
           if (optionsFile) {
             manifest.options_page = optionsFile;
           }
+
           fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
         }
 
@@ -44,17 +47,17 @@ const pages = {
   popup: {
     entry: 'src/pages/popup/index.tsx',
     template: './public/popup.html',
-    filename: 'popup-[chunkhash].html',
+    filename: 'popup-[chunk hash].html', // chunkhash 다시 추가
   },
   options: {
     entry: 'src/pages/options/index.tsx',
     template: './public/options.html',
-    filename: 'options-[chunkhash].html',
+    filename: 'options-[chunk hash].html', // chunkhash 다시 추가
   },
   'temp-data': {
     entry: 'src/pages/temp-data/index.tsx',
     template: './public/temp-data.html',
-    filename: 'temp-data-[chunkhash].html',
+    filename: 'temp-data-[chunk hash].html', // chunkhash 다시 추가
   },
 };
 
@@ -75,7 +78,11 @@ module.exports = {
   },
   output: {
     path: path.resolve(__dirname, 'dist'),
-    filename: '[name].js',
+    filename: (pathData) => {
+      // HTML 진입점 관련 JS 파일은 해시 포함
+      return pathData.chunk.name in pages ?
+          'js/[name].[contenthash].js' : '[name].js';
+    },
     clean: true,
   },
   module: {
@@ -138,7 +145,7 @@ module.exports = {
   },
   plugins: [
     new MiniCssExtractPlugin({
-      filename: '[name].css',
+      filename: 'css/[name].[content hash].css', // CSS 파일에 해시 추가
     }),
     new Dotenv({
       systemvars: true,
@@ -153,7 +160,7 @@ module.exports = {
         new HtmlWebpackPlugin({
           template: path.resolve(__dirname, pages[name].template),
           filename: pages[name].filename,
-          chunks: ['vendors', name],
+          chunks: [name], // vendors 제거하고 해당 entry만 포함
           cache: false,
           minify: false,
           inject: 'body',
@@ -165,15 +172,12 @@ module.exports = {
           from: 'public',
           to: '',
           globOptions: {
-            ignore: ['*.html'], // HTML 파일 복사 제외
+            ignore: ['*.html'],
           },
         },
         {
           from: 'manifest.json',
           to: 'manifest.json',
-          transform(content) {
-            return JSON.stringify(JSON.parse(content.toString()), null, 2);
-          },
         },
         {
           from: 'src/styles',
@@ -181,7 +185,7 @@ module.exports = {
         },
       ],
     }),
-    new ManifestUpdatePlugin(), // 추가된 플러그인
+    new ManifestUpdatePlugin(),// 추가된 플러그인
   ],
   optimization: {
     minimize: process.env.NODE_ENV === 'production',
@@ -199,20 +203,16 @@ module.exports = {
         extractComments: false,
       }),
       new CssMinimizerPlugin(),
+
     ],
     splitChunks: {
       chunks: 'all',
-      maxInitialRequests: Infinity,
-      minSize: 0,
+      name: 'vendors', // vendor chunk 이름을 단순화
       cacheGroups: {
-        vendor: {
+        defaultVendors: {
           test: /[\\/]node_modules[\\/]/,
-          name(module) {
-            const packageName = module.context.match(
-                /[\\/]node_modules[\\/](.*?)([\\/]|$)/
-            )[1];
-            return `vendor.${packageName.replace('@', '')}`;
-          },
+          priority: -10,
+          reuseExistingChunk: true,
         },
       },
     },
