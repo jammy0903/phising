@@ -1,222 +1,145 @@
-// src/utils/api.ts
-
 import {
   ApiResponse,
   NTSApiResponse,
-  NTSBusinessStatusRequest, NTSBusinessValidationRequest
+  NTSBusinessValidationRequest,
+  NTSBusinessStatusRequest
 } from './types';
 
-
 export const API_CONFIG = {
-  URLHAUS_ENDPOINT: 'https://urlhaus-api.abuse.ch/v1/url/',
   NTS_BASE_URL: 'https://api.odcloud.kr/api/nts-businessman/v1',
-  SAFE_BROWSING_ENDPOINT: 'https://safebrowsing.googleapis.com/v4/threatMatches:find',
-  DNSBL_SERVERS: [
-    'zen.spamhaus.org',
-    'bl.spamcop.net',
-    'dnsbl.sorbs.net'
-  ],
-  SURBL_SERVERS: [  // SURBL 서버 목록 추가
-    'multi.surbl.org',
-    'multi.uribl.com'
-  ],
-  REQUEST_TIMEOUT: 10000,
-  MAX_RETRIES: 3,
-  NTS_SERVICE_KEY: process.env.NTS_SERVICE_KEY || ''
-};
+  NTS_SERVICE_KEY: process.env.NTS_SERVICE_KEY || '',
+} as const;
 
-// 기본 API 요청 함수
+interface RequestConfig extends RequestInit {
+  timeout?: number;
+  retries?: number;
+  retryDelay?: number;
+}
+
 export async function makeRequest<T>(
     url: string,
-    options: RequestInit,
-    retries = API_CONFIG.MAX_RETRIES
+    options: RequestConfig = {}
 ): Promise<ApiResponse<T>> {
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.REQUEST_TIMEOUT);
+  const {
+    timeout = 5000,
+    retries = 3,
+    retryDelay = 1000,
+    ...fetchOptions
+  } = options;
 
-    const response = await fetch(url, {
-      ...options,
-      signal: controller.signal
-    });
+  let attempt = 0;
 
-    clearTimeout(timeoutId);
+  while (attempt < retries) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-    if (!response.ok) {
-      throw new Error(`Request failed with status ${response.status}`);
-    }
+      const response = await fetch(url, {
+        ...fetchOptions,
+        signal: controller.signal
+      });
 
-    const data = await response.json();
-    return { success: true, data };
+      clearTimeout(timeoutId);
 
-  } catch (error) {
-    if (error instanceof Error) {
-      if (error.name === 'AbortError') {
-        if (retries > 0) {
-          console.log(`Request timeout, retrying... (${retries} attempts left)`);
-          return makeRequest<T>(url, options, retries - 1);
-        }
-        return {
-          success: false,
-          error: 'Request timeout after multiple attempts'
-        };
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
+
+      const data = await response.json();
+      return { success: true, data };
+
+    } catch (error) {
+      attempt++;
+
+      if (error instanceof Error) {
+        if (error.name === 'AbortError' || attempt === retries) {
+          return {
+            success: false,
+            error: error.name === 'AbortError'
+                ? `Request timeout after ${timeout}ms`
+                : `Request failed after ${retries} attempts: ${error.message}`
+          };
+        }
+        await new Promise(resolve => setTimeout(resolve, retryDelay * attempt));
+        continue;
+      }
+
+      return {
+        success: false,
+        error: 'Unknown error occurred'
+      };
     }
-
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error occurred'
-    };
   }
+
+  return {
+    success: false,
+    error: `Failed after ${retries} attempts`
+  };
 }
 
-// NTS 관련 에러 클래스
-class NTSRequestError extends Error {
-  constructor(
-      message: string,
-      public endpoint: string,
-      public statusCode?: number,
-      public responseData?: any
-  ) {
-    super(message);
-    this.name = 'NTSRequestError';
-  }
-}
-
-// NTS API 요청 함수
-export async function makeNTSRequest(
+// 기본 NTS 요청 함수
+async function makeNTSRequest(
     endpoint: 'validate' | 'status',
-    data: NTSBusinessValidationRequest | NTSBusinessStatusRequest,
-    serviceKey: string = API_CONFIG.NTS_SERVICE_KEY
+    data: NTSBusinessValidationRequest | NTSBusinessStatusRequest
 ): Promise<ApiResponse<NTSApiResponse>> {
-  const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const url = `${API_CONFIG.NTS_BASE_URL}/${endpoint}?serviceKey=${encodeURIComponent(API_CONFIG.NTS_SERVICE_KEY)}`;
 
-  try {
-    const url = `${API_CONFIG.NTS_BASE_URL}/${endpoint}?serviceKey=${encodeURIComponent(serviceKey)}`;
-
-    console.log(`[NTS-API][${requestId}] Request to ${endpoint}:`, {
-      url: url.replace(serviceKey, '****'),
-      data
-    });
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Request-ID': requestId
-      },
-      body: JSON.stringify(data),
-    });
-
-    if (!response.ok) {
-      throw new NTSRequestError(
-          `HTTP error! status: ${response.status}`,
-          endpoint,
-          response.status
-      );
-    }
-
-    const responseData: NTSApiResponse = await response.json();
-
-    if (!responseData || !Array.isArray(responseData.data)) {
-      throw new NTSRequestError(
-          'Invalid response format',
-          endpoint,
-          response.status,
-          responseData
-      );
-    }
-
-    console.log(`[NTS-API][${requestId}] Success response from ${endpoint}:`, {
-      status_code: responseData.status_code,
-      dataCount: responseData.data.length
-    });
-
-    return {
-      success: true,
-      data: responseData
-    };
-
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-
-    console.error(`[NTS-API][${requestId}] Request failed for ${endpoint}:`, {
-      error: errorMessage,
-      details: error instanceof NTSRequestError ? {
-        statusCode: error.statusCode,
-        responseData: error.responseData
-      } : undefined
-    });
-
-    return {
-      success: false,
-      error: errorMessage
-    };
-  }
+  return makeRequest<NTSApiResponse>(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    body: JSON.stringify(data),
+    timeout: 10000,
+    retries: 3,
+    retryDelay: 1000
+  });
 }
 
-// Rate Limiting 유틸리티
+// Rate Limiting을 적용한 NTS 요청 함수
+export async function makeNTSRequestWithRetry<T>(
+    endpoint: 'validate' | 'status',
+    body: NTSBusinessValidationRequest | NTSBusinessStatusRequest,
+    config: {
+      maxRetries?: number;
+      retryDelay?: number;
+      serviceKey: string;
+    }
+): Promise<ApiResponse<NTSApiResponse>> {
+  const { maxRetries = 3, retryDelay = 1000, serviceKey } = config;
+  const url = `${API_CONFIG.NTS_BASE_URL}/${endpoint}?serviceKey=${encodeURIComponent(serviceKey)}`;
+
+  return makeRequest<NTSApiResponse>(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    body: JSON.stringify(body),
+    timeout: 10000,
+    retries: maxRetries,
+    retryDelay: retryDelay
+  });
+}
+
+// Rate Limiting을 적용한 NTS 요청 생성기
 export const createRateLimitedNTSRequest = (requestsPerSecond: number = 3) => {
   let lastRequestTime = 0;
   const minDelay = 1000 / requestsPerSecond;
 
   return async (
       endpoint: 'validate' | 'status',
-      data: NTSBusinessValidationRequest | NTSBusinessStatusRequest,
-      serviceKey?: string
+      data: NTSBusinessValidationRequest | NTSBusinessStatusRequest
   ): Promise<ApiResponse<NTSApiResponse>> => {
     const now = Date.now();
     const timeSinceLastRequest = now - lastRequestTime;
 
     if (timeSinceLastRequest < minDelay) {
-      await new Promise(resolve =>
-          setTimeout(resolve, minDelay - timeSinceLastRequest)
-      );
+      await new Promise(resolve => setTimeout(resolve, minDelay - timeSinceLastRequest));
     }
 
     lastRequestTime = Date.now();
-    return makeNTSRequest(endpoint, data, serviceKey);
-  };
-};
-
-// 재시도 로직을 포함한 래퍼 함수
-export const makeNTSRequestWithRetry = async (
-    endpoint: 'validate' | 'status',
-    data: NTSBusinessValidationRequest | NTSBusinessStatusRequest,
-    options: {
-      maxRetries?: number;
-      retryDelay?: number;
-      serviceKey?: string;
-    } = {}
-): Promise<ApiResponse<NTSApiResponse>> => {
-  const {
-    maxRetries = 3,
-    retryDelay = 1000,
-    serviceKey
-  } = options;
-
-  let lastError: Error | undefined;
-
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      const response = await makeNTSRequest(endpoint, data, serviceKey);
-      if (response.success) {
-        return response;
-      }
-      lastError = new Error(response.error);
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error('Unknown error');
-    }
-
-    if (attempt < maxRetries) {
-      await new Promise(resolve =>
-          setTimeout(resolve, retryDelay * Math.pow(2, attempt))
-      );
-    }
-  }
-
-  return {
-    success: false,
-    error: `Failed after ${maxRetries} retries: ${lastError?.message}`
+    return makeNTSRequest(endpoint, data);
   };
 };

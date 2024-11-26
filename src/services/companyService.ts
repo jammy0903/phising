@@ -1,3 +1,4 @@
+//src/services/companyService.ts
 import { makeNTSRequestWithRetry } from "@utils/api/api";
 import { API_CONFIG } from "@utils/config";
 import {
@@ -93,12 +94,13 @@ export class CompanyService {
         try {
             const cached = await this.getCachedResult(businessNumber);
             if (cached) {
+                const validValue: 'Y' | 'N' = cached.isValid ? 'Y' : 'N';
                 return {
                     success: true,
                     data: {
                         data: [{
                             b_no: cached.b_no,
-                            valid: cached.details.valid,
+                            valid: validValue,  // 'Y' | 'N' 타입으로 명시적 변환
                             b_stt: cached.details.b_stt,
                             b_stt_cd: cached.details.b_stt_cd,
                             tax_type: cached.details.tax_type,
@@ -133,18 +135,19 @@ export class CompanyService {
         try {
             const cached = await this.getCachedResult(businessNumber);
             if (cached) {
+                const validValue: 'Y' | 'N' = cached.isValid ? 'Y' : 'N';
                 return {
                     success: true,
                     data: {
                         data: [{
                             b_no: cached.b_no,
+                            valid: validValue,  // 'Y' | 'N' 타입으로 명시적 변환
                             b_stt: cached.details.b_stt,
                             b_stt_cd: cached.details.b_stt_cd,
                             tax_type: cached.details.tax_type,
                             tax_type_cd: cached.details.tax_type_cd,
                             rbf_tax_type: cached.details.rbf_tax_type,
-                            rbf_tax_type_cd: cached.details.rbf_tax_type_cd,
-                            valid: cached.details.valid
+                            rbf_tax_type_cd: cached.details.rbf_tax_type_cd
                         }],
                         status_code: "OK",
                         request_cnt: 1,

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AlertCircle, Shield, ExternalLink, Mail, Phone, RefreshCcw } from 'lucide-react';
+import { AlertCircle, Shield,  Mail, Phone, RefreshCcw } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
 import { tempDataService } from '@services/tempDataService';
 import { analysisService } from '@services/analysisService';

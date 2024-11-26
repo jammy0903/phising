@@ -11,11 +11,11 @@ module.exports = {
   mode: process.env.NODE_ENV === 'production' ? 'production' : 'development',
   devtool: process.env.NODE_ENV === 'production' ? false : 'cheap-module-source-map',
   entry: {
-    popup: './src/pages/popup/index.tsx',
-    options: './src/pages/options/index.tsx',
-    'temp-data': './src/pages/temp-data/index.tsx',
-    background: './src/background/index.ts',
-    contentScript: './src/contentScript/index.ts'
+    popup: path.resolve(__dirname, 'src/pages/popup/index.tsx'),
+    options: path.resolve(__dirname, 'src/pages/options/index.tsx'),
+    'temp-data': path.resolve(__dirname, 'src/pages/temp-data/index.tsx'),
+    background: path.resolve(__dirname, 'src/background/index.ts'),
+    contentScript: path.resolve(__dirname, 'src/contentScript/index.ts')
   },
   output: {
     path: path.resolve(__dirname, 'dist'),
@@ -61,23 +61,26 @@ module.exports = {
   },
   resolve: {
     fallback: {
-      async_hooks: false,
-      https: require.resolve('https-browserify'),
-      http: require.resolve('stream-http'),
-      stream: require.resolve('stream-browserify'),
-      buffer: require.resolve('buffer/'),
-      os: require.resolve('os-browserify/browser'),
-      assert: require.resolve('assert/'),
-      crypto: require.resolve('crypto-browserify'),
-      vm: require.resolve('vm-browserify'),
-      querystring: require.resolve('querystring-es3'),
+      // 제거할 모듈들
+      path: false,
+      dns: false,
       fs: false,
       net: false,
       tls: false,
-      path: require.resolve('path-browserify'),
-      zlib: require.resolve('browserify-zlib'),
-      url: require.resolve('url/'),
+      async_hooks: false,
+      https: false,
+      http: false,
+      stream: false,
+      crypto: false,
+      os: false,
+      url: false,
+      assert: false,
+      util: false,
+      buffer: false,
+      querystring: false,
+      zlib: false,
       dgram: false,
+      vm: false,
     },
     extensions: ['.tsx', '.ts', '.js', '.jsx', '.css'],
     alias: {
@@ -88,7 +91,67 @@ module.exports = {
       '@components': path.resolve(__dirname, 'src/components'),
     },
   },
+  plugins: [
+    new MiniCssExtractPlugin({
+      filename: '[name].css',
+    }),
+    new Dotenv({
+      systemvars: true,
+      safe: true,
+      silent: true,
+    }),
+    new webpack.ProvidePlugin({
+      process: 'process/browser',
+    }),
+    new CopyWebpackPlugin({
+      patterns: [
+        {
+          from: 'public',
+          to: '',
+          globOptions: {
+            ignore: ['*.html']
+          }
+        },
+        {
+          from: "manifest.json",
+          to: "manifest.json",
+          transform(content) {
+            return Buffer.from(JSON.stringify({
+              ...JSON.parse(content.toString()),
+              version: process.env.npm_package_version,
+            }, null, 2));
+          },
+        },
+        {
+          from: "src/styles/global.css",
+          to: "contentStyle.css"
+        }
+      ],
+    }),
+    new HtmlWebpackPlugin({
+      template: path.resolve(__dirname, 'public/popup.html'),
+      filename: 'popup-[chunk hash].html',
+      chunks: ['popup'],
+      cache: false,
+      minify: false,
+    }),
+    new HtmlWebpackPlugin({
+      template: path.resolve(__dirname, 'public/options.html'),
+      filename: 'options-[chunkhash].html',
+      chunks: ['options'],
+      cache: false,
+      minify: false,
+    }),
+    new HtmlWebpackPlugin({
+      template: path.resolve(__dirname, 'public/temp-data.html'),
+      filename: 'temp-data-[chunkhash].html',
+      chunks: ['temp-data'],
+      cache: false,
+      minify: false,
+    }),
+  ],
   optimization: {
+    runtimeChunk: 'single',
     minimize: process.env.NODE_ENV === 'production',
     minimizer: [
       new TerserPlugin({
@@ -106,82 +169,8 @@ module.exports = {
       new CssMinimizerPlugin(),
     ],
     splitChunks: {
-      chunks: 'all',
+      chunks: 'async',
       minSize: 20000,
-      minChunks: 1,
-      maxAsyncRequests: 30,
-      maxInitialRequests: 30,
-      cacheGroups: {
-        defaultVendors: {
-          test: /[\\/]node_modules[\\/]/,
-          priority: -10,
-          reuseExistingChunk: true,
-        },
-        default: {
-          minChunks: 2,
-          priority: -20,
-          reuseExistingChunk: true,
-        },
-      },
-    },
-  },
-  plugins: [
-    new MiniCssExtractPlugin({
-      filename: '[name].css',
-    }),
-    new Dotenv({
-      systemvars: true,
-      safe: true,
-      silent: true,
-    }),
-    new webpack.ProvidePlugin({
-      Buffer: ['buffer', 'Buffer'],
-      process: 'process/browser',
-    }),
-    new webpack.IgnorePlugin({
-      resourceRegExp: /defaultable/,
-    }),
-    new CopyWebpackPlugin({
-      patterns: [
-        {
-          from: "manifest.json",
-          to: "manifest.json",
-          transform(content) {
-            return Buffer.from(JSON.stringify({
-              ...JSON.parse(content.toString()),
-              version: process.env.npm_package_version,
-            }, null, 2));
-          },
-        },
-        {
-          from: "public/icons",
-          to: "icons",
-        },
-        {
-          from: "src/styles/global.css",
-          to: "contentStyle.css"
-        }
-      ],
-    }),
-    new HtmlWebpackPlugin({
-      template: './public/popup.html',
-      filename: 'popup.html',
-      chunks: ['popup'],
-    }),
-    new HtmlWebpackPlugin({
-      template: './public/options.html',
-      filename: 'options.html',
-      chunks: ['options'],
-    }),
-    new HtmlWebpackPlugin({
-      template: './public/temp-data.html',
-      filename: 'temp-data.html',
-      chunks: ['temp-data'],
-    }),
-  ],
-  performance: {
-    hints: process.env.NODE_ENV === 'production' ? 'warning' : false,
-    maxEntrypointSize: 2048000,
-    maxAssetSize: 2048000
-  },
+    }
+  }
 };

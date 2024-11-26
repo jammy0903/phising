@@ -1,24 +1,53 @@
-// src/pages/popup/index.tsx
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import Popup from './popup';
+import PopupUI from './popup';
 import '../../styles/global.css';
 
-// Chrome extension context setup
-if (chrome?.tabs === undefined) {
-    throw new Error('This script should only run in a Chrome extension context');
+// Error boundary를 위한 컴포넌트
+class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean}> {
+    constructor(props: {children: React.ReactNode}) {
+        super(props);
+        this.state = { hasError: false };
+    }
+
+    static getDerivedStateFromError() {
+        return { hasError: true };
+    }
+
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div className="p-4 text-red-500">
+                    Something went wrong. Please try again.
+                </div>
+            );
+        }
+
+        return this.props.children;
+    }
 }
 
-// Initialize root container
 const container = document.getElementById('root');
 if (!container) {
     throw new Error('Root element not found');
 }
 
-// Create and render root
 const root = createRoot(container);
+
 root.render(
     <React.StrictMode>
-        <Popup />
+        <ErrorBoundary>
+            <PopupUI />
+        </ErrorBoundary>
     </React.StrictMode>
 );
+
+// Chrome Extension API를 통한 스토리지 초기화
+chrome.storage.local.get(['isLoggedIn', 'analysisResults'], (result) => {
+    console.log('Loaded storage:', result);
+});
+
+// Cleanup
+window.addEventListener('unload', () => {
+    root.unmount();
+});

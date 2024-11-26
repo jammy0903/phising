@@ -1,3 +1,5 @@
+//src/services/jsAnalysisService.ts
+
 import {
     JSAnalysisResult,
     JSIssue,
