@@ -69,6 +69,10 @@ module.exports = {
     background: path.resolve(__dirname, 'src/background/index.ts'),
     contentScript: path.resolve(__dirname, 'src/contentScript/index.ts'),
   },
+  performance: {
+    maxEntrypointSize: 512000,
+    maxAssetSize: 512000
+  },
   output: {
     path: path.resolve(__dirname, 'dist'),
     filename: '[name].js',
@@ -197,19 +201,18 @@ module.exports = {
       new CssMinimizerPlugin(),
     ],
     splitChunks: {
-      chunks: 'all', // 모든 청크에 대해 분할 적용
-      name: 'vendors',
+      chunks: 'all',
+      maxInitialRequests: Infinity,
+      minSize: 0,
       cacheGroups: {
-        vendors: {
+        vendor: {
           test: /[\\/]node_modules[\\/]/,
-          name: 'vendors',
-          chunks: 'all',
-          priority: -10,
-        },
-        default: {
-          minChunks: 2,
-          priority: -20,
-          reuseExistingChunk: true,
+          name(module) {
+            const packageName = module.context.match(
+                /[\\/]node_modules[\\/](.*?)([\\/]|$)/
+            )[1];
+            return `vendor.${packageName.replace('@', '')}`;
+          },
         },
       },
     },
