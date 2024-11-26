@@ -39,7 +39,7 @@ const ResultCard: React.FC<ResultCardProps> = ({ title, status, details, issues 
             </div>
             {details && (
                 <div className="text-gray-600 mb-2">{details}</div>
-            )}
+             )}
             {issues && issues.length > 0 && (
                 <div className="mt-2">
                     <p className="font-medium mb-1">발견된 문제점:</p>

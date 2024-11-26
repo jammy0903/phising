@@ -355,11 +355,39 @@ export class JSAnalysisService {
     }
 
     private detectPatterns(code: string, patterns: RegExp[]): RegExpMatchArray[] {
-        return patterns.flatMap(pattern => {
-            const globalPattern = pattern.global ? pattern : new RegExp(pattern, 'g');
-            return Array.from(code.matchAll(globalPattern));
-        });
+        try {
+            return patterns.flatMap(pattern => {
+                // 입력값 유효성 검사 추가
+                if (!pattern || !(pattern instanceof RegExp)) {
+                    console.warn('Invalid pattern:', pattern);
+                    return [];
+                }
+
+                // pattern이 null이나 undefined가 아닌지 한번 더 확인
+                const globalPattern = pattern?.global ? pattern : new RegExp(pattern.source, 'g');
+
+                // code가 string인지 확인
+                if (typeof code !== 'string') {
+                    console.warn('Invalid code type:', typeof code);
+                    return [];
+                }
+
+                try {
+                    return Array.from(code.matchAll(globalPattern));
+                } catch (matchError) {
+                    console.error('Pattern matching error:', {
+                        pattern: globalPattern,
+                        error: matchError
+                    });
+                    return [];
+                }
+            });
+        } catch (error) {
+            console.error('Pattern detection error:', error);
+            return [];
+        }
     }
+
 
     public startAnalysis(callback: (issues: JSIssue[]) => void): void {
         if (this.isAnalyzing) return;

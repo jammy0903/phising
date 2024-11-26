@@ -7,6 +7,31 @@ const CssMinimizerPlugin = require('css-minimizer-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const webpack = require('webpack');
 
+
+class BuildInfoPlugin {
+  apply(compiler) {
+    compiler.hooks.afterEmit.tapAsync('BuildInfoPlugin', (compilation, callback) => {
+      const assets = Object.keys(compilation.assets);
+      const analysisFile = assets.find(f => f.startsWith('analysis-') && f.endsWith('.html'));
+
+      // background script에서 사용할 파일 생성
+      const buildInfo = {
+        analysisPage: analysisFile || 'analysis.html'
+      };
+
+      // build-info.json 파일 생성
+      require('fs').writeFile(
+          './dist/build-info.json',  // 출력 경로 (webpack output 디렉토리에 맞게 조정)
+          JSON.stringify(buildInfo, null, 2),
+          (err) => {
+            if (err) throw err;
+            callback();
+          }
+      );
+    });
+  }
+}
+
 class ManifestUpdatePlugin {
   apply(compiler) {
     compiler.hooks.afterEmit.tapAsync('ManifestUpdatePlugin', (compilation, callback) => {
@@ -47,17 +72,22 @@ const pages = {
   popup: {
     entry: 'src/pages/popup/index.tsx',
     template: './public/popup.html',
-    filename: 'popup-[chunk hash].html', // chunkhash 다시 추가
+    filename: 'popup-[chunk hash].html',
   },
   options: {
     entry: 'src/pages/options/index.tsx',
     template: './public/options.html',
-    filename: 'options-[chunk hash].html', // chunkhash 다시 추가
+    filename: 'options-[chunk hash].html',
   },
   'temp-data': {
     entry: 'src/pages/temp-data/index.tsx',
     template: './public/temp-data.html',
-    filename: 'temp-data-[chunk hash].html', // chunkhash 다시 추가
+    filename: 'temp-data-[chunk hash].html',
+  },
+  analysis: {
+    entry: 'src/pages/analysis/index.tsx',
+    template: './public/analysis.html',
+    filename: 'analysis-[chunk hash].html',
   },
 };
 
@@ -81,7 +111,7 @@ module.exports = {
     filename: (pathData) => {
       // HTML 진입점 관련 JS 파일은 해시 포함
       return pathData.chunk.name in pages ?
-          'js/[name].[contenthash].js' : '[name].js';
+          'js/[name].[content hash].js' : '[name].js';
     },
     clean: true,
   },
@@ -145,7 +175,7 @@ module.exports = {
   },
   plugins: [
     new MiniCssExtractPlugin({
-      filename: 'css/[name].[content hash].css', // CSS 파일에 해시 추가
+      filename: 'css/[name].[content hash].css',
     }),
     new Dotenv({
       systemvars: true,
@@ -160,7 +190,7 @@ module.exports = {
         new HtmlWebpackPlugin({
           template: path.resolve(__dirname, pages[name].template),
           filename: pages[name].filename,
-          chunks: [name], // vendors 제거하고 해당 entry만 포함
+          chunks: [name],
           cache: false,
           minify: false,
           inject: 'body',
@@ -183,9 +213,10 @@ module.exports = {
           from: 'src/styles',
           to: 'styles',
         },
+        { from: "public/build-info.json", to: "build-info.json"}
       ],
     }),
-    new ManifestUpdatePlugin(),// 추가된 플러그인
+    new ManifestUpdatePlugin(),new BuildInfoPlugin()
   ],
   optimization: {
     minimize: process.env.NODE_ENV === 'production',
@@ -202,8 +233,7 @@ module.exports = {
         },
         extractComments: false,
       }),
-      new CssMinimizerPlugin(),
-
+      new CssMinimizerPlugin()
     ],
     splitChunks: {
       chunks: 'all',

@@ -74,9 +74,20 @@ const PopupUI = () => {
   const [error, setError] = useState<string | null>(null);
   const [tempEmail, setTempEmail] = useState<TempEmailData | null>(null);
   const [tempPhone, setTempPhone] = useState<TempPhoneData | null>(null);
+  const [analysisPath, setAnalysisPath] = useState<string>('analysis.html');
 
   useEffect(() => {
     checkCurrentTab();
+    // build-info.json에서 분석 페이지 경로 가져오기
+    fetch(chrome.runtime.getURL('build-info.json'))
+        .then(response => response.json())
+        .then(buildInfo => {
+          setAnalysisPath(buildInfo.analysisPage);
+        })
+        .catch(error => {
+          console.error('Failed to load build info:', error);
+          // 에러 시 기본값 사용
+        });
   }, []);
 
   const checkCurrentTab = async () => {
@@ -240,15 +251,28 @@ const PopupUI = () => {
         )}
 
         {/* Detailed Analysis Button */}
-        <button
-            onClick={() => chrome.tabs.create({url: 'analysis.html'})}
-            className="mt-2 w-full p-2 rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 text-white font-medium hover:from-blue-600 hover:to-blue-700"
-        >
-          자세히 보기
-        </button>
+        <div className="space-y-2">  {/* 버튼들을 감싸는 컨테이너 */}
+          <button
+              onClick={() => chrome.tabs.create({
+                url: chrome.runtime.getURL(analysisPath)
+              })}
+              className="mt-2 w-full p-2 rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 text-white font-medium hover:from-blue-600 hover:to-blue-700"
+          >
+            자세히 보기
+          </button>
+
+          <button
+              onClick={() => chrome.tabs.create({
+                url: chrome.runtime.getURL(chrome.runtime.getManifest().options_page)
+              })}
+              className="mt-2 w-full p-2 rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 text-white font-medium hover:from-blue-600 hover:to-blue-700"
+          >
+            설정
+          </button>
+        </div>
 
         {/* Report Button */}
-        <ReportButton />
+
       </div>
   );
 };
