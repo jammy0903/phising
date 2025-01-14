@@ -11,7 +11,7 @@ A Chrome extension designed to protect users from phishing websites. Through rea
 - User-friendly warning notifications
 - Automatic background operation
 
-```markdown
+
 ## 🔧 Tech Stack
 
 - TypeScript
@@ -43,7 +43,7 @@ npm run build
 - Enable "Developer mode" in the top right
 - Click "Load unpacked extension"
 - Select the built project directory
-```
+
 ## 💻 How to Use
 ### ⚠️ DO NOT USE - Work in Progress
 1. The extension runs automatically after installation in Chrome browser.
