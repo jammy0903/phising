@@ -205,7 +205,7 @@ export class JSAnalysisService {
                 }
             });
         }
-    }
+    } // 클릭제킹
     private analyzeDOMElements(): void {
         document.querySelectorAll('*').forEach(element => {
             const style = window.getComputedStyle(element);
@@ -229,7 +229,7 @@ export class JSAnalysisService {
             style.zIndex === '9999' &&
             (style.opacity === '0' || style.visibility === 'hidden');
     }
-
+//input 필드 hidden 발견
     private checkHiddenInput(input: HTMLInputElement, style: CSSStyleDeclaration): void {
         if (input.type === 'hidden' || style.opacity === '0' || style.visibility === 'hidden') {
             this.issues.push({
@@ -249,13 +249,13 @@ export class JSAnalysisService {
                     this.issues.push({
                         type: 'formHijacking',
                         severity: 'medium',
-                        description: `인라인 이벤트 핸들러 발견: ${attr}`,
+                        description: `키로거 키로깅 발견: ${attr}`,
                         location: `Element: ${element.tagName}`
                     });
                 }
             });
         });
-    }
+    } //
     private analyzeExecutionContext(): void {
         try {
             Array.from(window.frames).forEach((frame: Window) => {
@@ -285,7 +285,7 @@ export class JSAnalysisService {
             console.warn('Frame analysis failed:', e);
         }
     }
-
+//IP위치 어딘가
     private getLocationInfo(matches: RegExpMatchArray[], code: string): string {
         return matches
             .map(match => {
@@ -298,7 +298,7 @@ export class JSAnalysisService {
     }
 
 
-
+//API보내나 안보내나
     private reportSensitiveAPIUsage(api: string, args: any[]): void {
         const stack = new Error().stack;
         this.issues.push({
