@@ -76,7 +76,9 @@ export class JSAnalysisService {
         ],
         api_usage: [
             /window\.crypto\.subtle/g
-        ]
+        ],
+        // URL 휴리스틱은 코드 정규식이 아니라 urlHeuristics.ts 에서 판정한다.
+        suspiciousUrl: []
     } as const;
 
     // 카테고리별 가중치(점수). 한 번이라도 매칭되면 이 점수가 가산된다.
@@ -92,7 +94,8 @@ export class JSAnalysisService {
         communication: 15,
         security: 10,
         worker: 5,
-        api_usage: 3
+        api_usage: 3,
+        suspiciousUrl: 0   // URL 점수는 urlHeuristics.ts 에서 별도 산정
     } as const;
 
     // 점수 → 상태 임계치
@@ -113,7 +116,8 @@ export class JSAnalysisService {
         communication: '창 간 통신 시도가 감지되었습니다.',
         security: '보안 정책 위반이 감지되었습니다.',
         worker: '웹 워커 사용이 감지되었습니다.',
-        api_usage: '민감한 API 사용이 감지되었습니다.'
+        api_usage: '민감한 API 사용이 감지되었습니다.',
+        suspiciousUrl: '의심스러운 URL 패턴이 감지되었습니다.'
     } as const;
 
     private readonly patternSeverities: Record<PatternType, Severity> = {
@@ -127,7 +131,8 @@ export class JSAnalysisService {
         communication: 'medium',
         security: 'high',
         worker: 'medium',
-        api_usage: 'medium'
+        api_usage: 'medium',
+        suspiciousUrl: 'medium'
     } as const;
 
     private analyzeIframes(): void {

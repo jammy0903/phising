@@ -170,7 +170,8 @@ export type PatternType =
     | 'communication'
     | 'security'
     | 'worker'
-    | 'api_usage';
+    | 'api_usage'
+    | 'suspiciousUrl';
 
 export interface JSIssue {
     type: PatternType;

@@ -1,12 +1,14 @@
 // src/background/index.ts
 import type { JSIssue } from '@utils/api/types';
 import { startNetworkMonitoring, NetworkFinding } from '@services/networkMonitor';
+import { analyzeUrl } from '@services/urlHeuristics';
 
 interface StorageData {
   notificationsEnabled: boolean;
-  // 팝업이 읽는 '병합된' 결과(JS 분석 + 네트워크 모니터링)
+  // 팝업이 읽는 '병합된' 결과(URL 휴리스틱 + JS 분석 + 네트워크 모니터링)
   lastAnalysisResults: Record<string, JSIssue[]>;
   // 소스별 원본(병합 재계산용)
+  urlIssues: Record<string, JSIssue[]>;
   jsIssues: Record<string, JSIssue[]>;
   networkIssues: Record<string, JSIssue[]>;
   // 탭별 알림 중복 방지
@@ -20,6 +22,7 @@ const MAX_NET_ISSUES_PER_TAB = 20;
 const initialStorageData: StorageData = {
   notificationsEnabled: true,
   lastAnalysisResults: {},
+  urlIssues: {},
   jsIssues: {},
   networkIssues: {},
   notifiedTabs: {},
@@ -38,6 +41,8 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     void clearTabState(tabId);
   }
   if (changeInfo.status === 'complete' && tab.url?.startsWith('http')) {
+    // URL 휴리스틱(오프라인)은 즉시 실행
+    void handleUrlAnalysis(tabId, tab.url);
     chrome.tabs.sendMessage(tabId, { type: 'REQUEST_ANALYSIS' }).catch(() => {
       // content script 미주입 페이지(chrome:// 등) — 무시
     });
@@ -73,6 +78,15 @@ function dedupe(issues: JSIssue[]): JSIssue[] {
   });
 }
 
+// URL 휴리스틱(오프라인) 저장 → 병합 재계산
+async function handleUrlAnalysis(tabId: number, url: string) {
+  const { issues } = analyzeUrl(url);
+  const { urlIssues } = await chrome.storage.local.get('urlIssues');
+  const next = { ...(urlIssues || {}), [tabId]: issues };
+  await chrome.storage.local.set({ urlIssues: next });
+  await recompute(tabId);
+}
+
 // JS 분석 결과 저장 → 병합 재계산
 async function handleAnalysisResult(issues: JSIssue[], tabId?: number) {
   if (!tabId) return;
@@ -98,12 +112,13 @@ async function handleNetworkFinding(finding: NetworkFinding) {
 
 // 소스별 이슈를 병합해 lastAnalysisResults 갱신 + 뱃지/알림 처리
 async function recompute(tabId: number) {
-  const { jsIssues, networkIssues, lastAnalysisResults } =
-    await chrome.storage.local.get(['jsIssues', 'networkIssues', 'lastAnalysisResults']);
+  const { urlIssues, jsIssues, networkIssues, lastAnalysisResults } =
+    await chrome.storage.local.get(['urlIssues', 'jsIssues', 'networkIssues', 'lastAnalysisResults']);
 
+  const url: JSIssue[] = (urlIssues && urlIssues[tabId]) || [];
   const js: JSIssue[] = (jsIssues && jsIssues[tabId]) || [];
   const net: JSIssue[] = (networkIssues && networkIssues[tabId]) || [];
-  const merged = dedupe([...js, ...net]);
+  const merged = dedupe([...url, ...js, ...net]);
 
   await chrome.storage.local.set({
     lastAnalysisResults: { ...(lastAnalysisResults || {}), [tabId]: merged }
@@ -118,13 +133,13 @@ async function recompute(tabId: number) {
 
 // 탭 상태 전체 초기화
 async function clearTabState(tabId: number) {
-  const { jsIssues, networkIssues, lastAnalysisResults, notifiedTabs } =
-    await chrome.storage.local.get(['jsIssues', 'networkIssues', 'lastAnalysisResults', 'notifiedTabs']);
+  const { urlIssues, jsIssues, networkIssues, lastAnalysisResults, notifiedTabs } =
+    await chrome.storage.local.get(['urlIssues', 'jsIssues', 'networkIssues', 'lastAnalysisResults', 'notifiedTabs']);
 
-  for (const store of [jsIssues, networkIssues, lastAnalysisResults, notifiedTabs]) {
+  for (const store of [urlIssues, jsIssues, networkIssues, lastAnalysisResults, notifiedTabs]) {
     if (store) delete store[tabId];
   }
-  await chrome.storage.local.set({ jsIssues, networkIssues, lastAnalysisResults, notifiedTabs });
+  await chrome.storage.local.set({ urlIssues, jsIssues, networkIssues, lastAnalysisResults, notifiedTabs });
   chrome.action.setBadgeText({ tabId, text: '' }).catch(() => {});
 }
 
