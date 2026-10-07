@@ -18,7 +18,9 @@
   ],
 
   "host_permissions": [
-    "https://www.dnsbl.info/*",
+    "https://cloudflare-dns.com/*",
+    "https://crt.sh/*",
+    "https://safebrowsing.googleapis.com/*",
     "https://api.odcloud.kr/*",
     "https://urlhaus-api.abuse.ch/*"
   ],

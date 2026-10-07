@@ -1,9 +1,10 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { AnalysisPage } from './analysis';
+import type { DetailResult } from '@utils/api/types';
 import '../../styles/global.css';
 
-const suspiciousResult = {
+const suspiciousResult: DetailResult = {
     status: 'danger' as const,
     url: 'https://www.yesnoif.com/',
     issues: [

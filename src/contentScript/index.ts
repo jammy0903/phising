@@ -98,14 +98,20 @@ function sendToBackground(issues: JSIssue[], businessNumbers?: string[]) {
   });
 }
 
+// 점수가 임계치(warning) 미만이면 정상으로 보고 전송하지 않는다.
+// 이렇게 해야 외부 iframe 하나 같은 약한 신호로 모든 사이트에 뱃지가 뜨는 걸 막는다.
+function reportIfRisky(issues: JSIssue[]) {
+  if (jsAnalysisService.getStatus() === 'safe') return;
+  const businessNumbers = findBusinessNumbers();
+  sendToBackground(issues, businessNumbers);
+}
+
 // 분석 시작
 function initializeAnalysis() {
   // JS 분석 시작
   jsAnalysisService.startAnalysis((issues: JSIssue[]) => {
     if (issues.length > 0) {
-      // 사업자등록번호도 함께 찾아서 전송
-      const businessNumbers = findBusinessNumbers();
-      sendToBackground(issues, businessNumbers);
+      reportIfRisky(issues);
     }
   });
 }
@@ -122,15 +128,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true;
 });
 
-// MutationObserver로 DOM 변경 감지
+// MutationObserver로 DOM 변경 감지 (debounce 적용)
+// 디바운스가 없으면 DOM 변경마다 전체 페이지를 재분석해 무거운 사이트가 멈춘다.
+let mutationTimer: number | undefined;
+const MUTATION_DEBOUNCE_MS = 800;
+
 const observer = new MutationObserver(() => {
-  if (jsAnalysisService) {
+  if (!jsAnalysisService) return;
+  if (mutationTimer !== undefined) {
+    clearTimeout(mutationTimer);
+  }
+  mutationTimer = window.setTimeout(() => {
     const result = jsAnalysisService.analyze();
     if (result.issues.length > 0) {
-      const businessNumbers = findBusinessNumbers();
-      sendToBackground(result.issues, businessNumbers);
+      reportIfRisky(result.issues);
     }
-  }
+  }, MUTATION_DEBOUNCE_MS);
 });
 
 // DOM 변경 감지 시작
@@ -142,5 +155,6 @@ observer.observe(document.documentElement, {
 // 페이지 언로드 시 분석 중지
 window.addEventListener('unload', () => {
   observer.disconnect();
+  if (mutationTimer !== undefined) clearTimeout(mutationTimer);
   jsAnalysisService.stopAnalysis();
 });

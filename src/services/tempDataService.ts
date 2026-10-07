@@ -118,6 +118,10 @@ export class TempDataService {
     }
 
     private async initDB(): Promise<void> {
+        // indexedDB 가 없는 환경(테스트 등)에서는 조용히 건너뛴다.
+        if (typeof indexedDB === 'undefined') {
+            return;
+        }
         return new Promise((resolve, reject) => {
             const request = indexedDB.open(TempDataService.DB_NAME, 1);
 

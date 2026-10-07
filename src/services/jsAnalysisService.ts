@@ -17,93 +17,90 @@ export class JSAnalysisService {
     private callback: ((issues: JSIssue[]) => void) | null = null;
 
     private readonly patterns: Record<PatternType, RegExp[]> = {
+        // 고신호(高信號) 패턴만 남긴다. 정상 사이트에도 흔한 API는
+        // 단독으로는 점수를 거의 주지 않도록 categoryWeights 에서 조정한다.
         browserExploit: [
-            /\.prototype\.(constructor|__proto__|__defineGetter__|__defineSetter__)/g,
-            /Object\.defineProperty/g,
+            /\.constructor\s*\(\s*['"]/g,          // Function constructor 로 코드 생성
             /\.constructor\.constructor/g,
-            /\[\s*['"]constructor['"]\s*\]/g,
-            /with\s*\(/g,
-            /debugger/g
+            /__proto__\s*\[/g,
+            /\[\s*['"]constructor['"]\s*\]/g
         ],
         dataExfiltration: [
-            /\.send\(.*localStorage/g,
-            /\.send\(.*sessionStorage/g,
-            /navigator\.sendBeacon/g,
-            /fetch\(['"](https?:)?\/\/(?!${window.location.hostname})/g,
-            /new\s+WebSocket\(/g,
-            /\.upload\(/g,
-            /\.ajax\(/g,
-            /\.post\(/g
+            // 저장소/쿠키를 그대로 전송 = 고신호
+            /\.send\s*\(\s*[^)]*(localStorage|sessionStorage|document\.cookie)/g,
+            /(fetch|axios)\s*\([^)]*\b(document\.cookie|localStorage|sessionStorage)\b/g,
+            /navigator\.sendBeacon\s*\([^)]*(cookie|localStorage|sessionStorage|password|passwd|pwd)/gi,
+            /new\s+WebSocket\s*\(\s*['"`]wss?:\/\//g
+            // 일반 cross-origin fetch 탐지는 regex 대신 background 의
+            // webRequest 네트워크 모니터링이 담당한다(오탐 방지).
         ],
         xss: [
-            /document\.write/g,
-            /\.innerHTML\s*=/g,
-            /\.outerHTML\s*=/g,
+            /document\.write\s*\(/g,
             /\.insertAdjacentHTML/g,
-            /\$\(['"]*.*['"]*\)\.html\(/g,
             /execScript/g,
-            /setInterval\(['"]/g,
-            /setTimeout\(['"]/g,
-            /new\s+Function\(['"]/g
+            /new\s+Function\s*\(\s*['"]/g,
+            /setTimeout\(\s*['"]/g,
+            /setInterval\(\s*['"]/g
         ],
         keylogger: [
-            /addEventListener\(['"](keydown|keyup|keypress)['"]/g,
-            /document\.onkeydown/g,
-            /document\.onkeyup/g,
-            /document\.onkeypress/g,
-            /\.keyCode/g,
-            /\.key\s*===/g,
-            /\.charCode/g
+            /addEventListener\(\s*['"](keydown|keyup|keypress)['"]/g,
+            /document\.onkey(down|up|press)\s*=/g,
+            /\.(keyCode|charCode)\b/g
         ],
         formHijacking: [
-            /addEventListener\(['"](submit)['"]/g,
-            /\.submit\(\)/g,
-            /form\.elements/g,
-            /\.preventDefault\(\)/g,
-            /form\.action\s*=/g,
-            /new\s+FormData/g,
-            /querySelector\(['"](input|form|select|textarea)/g
+            /form(\.|\s*\[['"])action\s*\]?\s*=/g,       // 폼 action 을 코드로 바꿈
+            /addEventListener\(\s*['"]submit['"]/g
         ],
         redirect: [
-            /window\.location/g,
-            /document\.location/g,
-            /location\.href/g,
-            /location\.replace/g,
-            /history\.pushState/g,
-            /history\.replaceState/g,
-            /window\.navigate/g
+            /location\s*\.\s*(href|replace|assign)\s*=/g,
+            /location\s*\.\s*replace\s*\(/g,
+            /window\.open\s*\(/g
         ],
         obfuscation: [
-            /eval\(/g,
-            /Function\(/g,
-            /fromCharCode/g,
-            /atob\(/g,
-            /btoa\(/g,
-            /unescape\(/g,
-            /decodeURIComponent\(/g,
-            /String\.fromCharCode/g
+            /\beval\s*\(/g,
+            /String\.fromCharCode/g,
+            /\batob\s*\(/g,
+            /unescape\s*\(/g,
+            /\\x[0-9a-f]{2}(\\x[0-9a-f]{2}){4,}/gi    // 연속 hex 이스케이프 = 난독화 징후
         ],
         communication: [
-            /postMessage/g,
-            /MessageChannel/g,
-            /BroadcastChannel/g
+            /\.postMessage\s*\(\s*[^,]*,\s*['"`]\*['"`]/g   // targetOrigin '*' = 위험
         ],
         security: [
             /SecurityPolicyViolation/g,
             /SecurityError/g
         ],
         worker: [
-            /new\s+Worker/g,
             /serviceWorker\.register/g,
-            /SharedWorker/g
+            /new\s+SharedWorker/g
         ],
         api_usage: [
-            /navigator\./g,
-            /window\.crypto/g,
-            /localStorage\./g,
-            /sessionStorage\./g
+            /window\.crypto\.subtle/g
         ]
     } as const;
+
+    // 카테고리별 가중치(점수). 한 번이라도 매칭되면 이 점수가 가산된다.
+    // 흔하지만 맥락상 의미 있는 것은 낮게, 피싱 특이 신호는 높게 둔다.
+    private readonly categoryWeights: Record<PatternType, number> = {
+        browserExploit: 35,
+        dataExfiltration: 30,
+        xss: 15,
+        keylogger: 15,
+        formHijacking: 20,
+        redirect: 8,
+        obfuscation: 25,
+        communication: 15,
+        security: 10,
+        worker: 5,
+        api_usage: 3
+    } as const;
+
+    // 점수 → 상태 임계치
+    private static readonly RISK_THRESHOLD_DANGER = 60;
+    private static readonly RISK_THRESHOLD_WARNING = 30;
+
+    // 누적 리스크 점수(analyze 1회 기준)
+    private riskScore = 0;
 
     private readonly patternDescriptions: Record<PatternType, string> = {
         browserExploit: '브라우저 취약점을 악용하는 코드가 발견되었습니다.',
@@ -139,12 +136,14 @@ export class JSAnalysisService {
                 if (iframe.src) {
                     const iframeSrc = new URL(iframe.src);
                     if (iframeSrc.hostname !== window.location.hostname) {
+                        // 외부 iframe 은 광고/임베드로 매우 흔하므로 약한 신호(low)로만 기록
                         this.issues.push({
                             type: 'redirect',
-                            severity: 'medium',
+                            severity: 'low',
                             description: '외부 도메인의 iframe 감지됨',
                             location: `iframe: ${iframeSrc.hostname}`
                         });
+                        this.riskScore += 3;
                     }
                 }
             } catch (error) {
@@ -213,9 +212,10 @@ export class JSAnalysisService {
                 this.issues.push({
                     type: 'formHijacking',
                     severity: 'high',
-                    description: '숨겨진 오버레이 요소 발견',
+                    description: '숨겨진 오버레이 요소 발견(클릭재킹 의심)',
                     location: `Element: ${element.tagName}`
                 });
+                this.riskScore += 30;
             }
 
             if (element instanceof HTMLInputElement) {
@@ -229,61 +229,54 @@ export class JSAnalysisService {
             style.zIndex === '9999' &&
             (style.opacity === '0' || style.visibility === 'hidden');
     }
-//input 필드 hidden 발견
+// 시각적으로 숨겨진 '자격증명' 입력 필드만 위험으로 본다.
+// type="hidden" 은 CSRF 토큰 등 정상 사이트도 광범위하게 쓰므로 제외한다.
     private checkHiddenInput(input: HTMLInputElement, style: CSSStyleDeclaration): void {
-        if (input.type === 'hidden' || style.opacity === '0' || style.visibility === 'hidden') {
+        const sensitiveTypes = ['password', 'text', 'email', 'tel'];
+        if (input.type === 'hidden') return;              // 정상 패턴 — 무시
+
+        const visuallyHidden =
+            style.opacity === '0' ||
+            style.visibility === 'hidden' ||
+            style.display === 'none';
+
+        // 비밀번호/아이디 류 입력이 눈에 안 보이게 숨겨져 있으면 자격증명 탈취 의심
+        if (sensitiveTypes.includes(input.type) && visuallyHidden) {
             this.issues.push({
                 type: 'formHijacking',
                 severity: 'high',
-                description: '숨겨진 입력 필드 발견',
-                location: `Input: ${input.name || input.id || 'unnamed'}`
+                description: '보이지 않게 숨겨진 자격증명 입력 필드 발견',
+                location: `Input[type=${input.type}]: ${input.name || input.id || 'unnamed'}`
             });
+            this.riskScore += 25;
         }
     }
 
     private analyzeEventListeners(): void {
+        // 인라인 키 이벤트 핸들러만 본다(onclick/onsubmit 은 너무 흔해 제외).
+        // 키 이벤트 핸들러는 그 자체로는 약한 신호라 low 로 둔다.
+        const keyEventAttrs = ['onkeyup', 'onkeydown', 'onkeypress'];
+        let keyHandlerCount = 0;
         document.querySelectorAll('*').forEach(element => {
-            const eventAttributes = ['onclick', 'onsubmit', 'onkeyup', 'onkeydown', 'onkeypress'];
-            eventAttributes.forEach(attr => {
-                if (element.hasAttribute(attr)) {
-                    this.issues.push({
-                        type: 'formHijacking',
-                        severity: 'medium',
-                        description: `키로거 키로깅 발견: ${attr}`,
-                        location: `Element: ${element.tagName}`
-                    });
-                }
+            keyEventAttrs.forEach(attr => {
+                if (element.hasAttribute(attr)) keyHandlerCount++;
             });
         });
-    } //
-    private analyzeExecutionContext(): void {
-        try {
-            Array.from(window.frames).forEach((frame: Window) => {
-                try {
-                    if (frame !== window && typeof frame.postMessage === 'function') {
-                        this.issues.push({
-                            type: 'dataExfiltration',
-                            severity: 'medium',
-                            description: '창 간 통신 시도 감지',
-                            location: 'Window Communication'
-                        });
-                    }
-
-                    if (frame.origin !== window.origin) {
-                        this.issues.push({
-                            type: 'browserExploit',
-                            severity: 'high',
-                            description: '다른 출처의 프레임 감지',
-                            location: `Origin: ${frame.origin}`
-                        });
-                    }
-                } catch (e) {
-                    // 크로스 오리진 접근 제한으로 인한 오류 무시
-                }
+        if (keyHandlerCount > 0) {
+            this.issues.push({
+                type: 'keylogger',
+                severity: keyHandlerCount >= 3 ? 'medium' : 'low',
+                description: `인라인 키 입력 핸들러 ${keyHandlerCount}개 발견`,
+                location: 'inline on-key handlers'
             });
-        } catch (e) {
-            console.warn('Frame analysis failed:', e);
+            this.riskScore += Math.min(keyHandlerCount * 5, 15);
         }
+    }
+
+    private analyzeExecutionContext(): void {
+        // 교차 출처 iframe 자체는 광고/임베드 등으로 매우 흔하므로 신호로 쓰지 않는다.
+        // (frame.postMessage 존재 여부는 모든 프레임이 참이라 의미 없어 제거)
+        // iframe 분석은 analyzeIframes() 에서 처리한다.
     }
 //IP위치 어딘가
     private getLocationInfo(matches: RegExpMatchArray[], code: string): string {
@@ -308,6 +301,24 @@ export class JSAnalysisService {
             location: stack ? stack.split('\n')[2] : 'unknown'
         });
     }
+    // 기여 점수 → 개별 이슈 심각도
+    private severityFromContribution(contribution: number): Severity {
+        if (contribution >= 25) return 'high';
+        if (contribution >= 12) return 'medium';
+        return 'low';
+    }
+
+    // 누적 점수 → 페이지 전체 상태
+    public getStatus(): 'safe' | 'warning' | 'danger' {
+        if (this.riskScore >= JSAnalysisService.RISK_THRESHOLD_DANGER) return 'danger';
+        if (this.riskScore >= JSAnalysisService.RISK_THRESHOLD_WARNING) return 'warning';
+        return 'safe';
+    }
+
+    public getRiskScore(): number {
+        return this.riskScore;
+    }
+
     public analyzeScript(code: string): JSAnalysisResult {
         try {
             if (!code) {
@@ -322,9 +333,16 @@ export class JSAnalysisService {
                 const matches = this.detectPatterns(code, patterns);
 
                 if (matches.length > 0) {
+                    // 기여 점수 = 가중치 × (1 + 반복 보너스). 매칭이 많을수록 조금 더.
+                    const weight = this.categoryWeights[patternType];
+                    const repeatBonus = 1 + 0.1 * Math.min(matches.length - 1, 5);
+                    const contribution = Math.round(weight * repeatBonus);
+
+                    this.riskScore += contribution;
+
                     scriptIssues.push({
                         type: patternType,
-                        severity: this.patternSeverities[patternType],
+                        severity: this.severityFromContribution(contribution),
                         description: this.patternDescriptions[patternType],
                         location: this.getLocationInfo(matches, code)
                     });
@@ -332,7 +350,7 @@ export class JSAnalysisService {
                     detectedPatterns.push({
                         pattern: patterns.map(p => p.source).join('|'),
                         count: matches.length,
-                        risk: 0 // 점수 계산 제거
+                        risk: contribution
                     });
                 }
             });
@@ -426,6 +444,11 @@ export class JSAnalysisService {
     }
 
     public analyze(): JSAnalysisResult {
+        // ⚠️ 매 분석마다 상태 초기화. 초기화하지 않으면 5초 주기/DOM 변경마다
+        // issues 와 riskScore 가 무한 누적되어 모든 페이지가 '위험'이 된다.
+        this.issues = [];
+        this.riskScore = 0;
+
         const analysisResult: JSAnalysisResult = {
             issues: [],
             patterns: []
@@ -435,9 +458,10 @@ export class JSAnalysisService {
             this.analyzeDOMElements();
             this.analyzeEventListeners();
             this.analyzeExecutionContext();
-            this.monitorWorkers();
-            this.monitorSensitiveAPIs();
             this.analyzeIframes();
+            // monitorWorkers()/monitorSensitiveAPIs() 는 content script 의
+            // isolated world 에서는 페이지 실제 객체에 영향을 주지 못하고,
+            // 호출마다 Proxy 가 중첩되므로 analyze 루프에서 제외한다.
 
             // 페이지의 모든 스크립트 분석
             document.querySelectorAll('script').forEach(script => {
@@ -448,11 +472,8 @@ export class JSAnalysisService {
                 }
             });
 
-            // 인라인 이벤트 핸들러 분석
-            this.analyzeInlineEventHandlers();
-
             return {
-                issues: [...new Set([...analysisResult.issues, ...this.issues])],
+                issues: this.dedupeIssues([...analysisResult.issues, ...this.issues]),
                 patterns: analysisResult.patterns
             };
         } catch (error) {
@@ -467,21 +488,15 @@ export class JSAnalysisService {
             };
         }
     }
-    private analyzeInlineEventHandlers(): void {
-        const elements = document.querySelectorAll('*');
-        elements.forEach(element => {
-            const attributes = element.attributes;
-            for (let i = 0; i < attributes.length; i++) {
-                const attr = attributes[i];
-                if (attr.name.startsWith('on')) {
-                    this.issues.push({
-                        type: 'formHijacking',
-                        severity: 'medium',
-                        description: `인라인 이벤트 핸들러 발견: ${attr.name}`,
-                        location: `Element: ${element.tagName}`
-                    });
-                }
-            }
+
+    // 객체 참조 기준이 아니라 내용(type+description+location) 기준으로 중복 제거
+    private dedupeIssues(issues: JSIssue[]): JSIssue[] {
+        const seen = new Set<string>();
+        return issues.filter(issue => {
+            const key = `${issue.type}|${issue.description}|${issue.location ?? ''}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
         });
     }
 }

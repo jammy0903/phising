@@ -13,27 +13,13 @@ import {
 } from "@utils/api/types";
 import {CompanyService} from './companyService';
 import {JSAnalysisService} from './jsAnalysisService';
+import {checkDnsbl, checkSurbl} from './dnsbl';
 
 export class DomainAnalysisService {
   private readonly apiKey: string;
   private readonly safeBrowsingKey: string;
   private companyService: CompanyService;
   private jsAnalysisService: JSAnalysisService;
-
-  private readonly DNSBL_THREATS = [
-    "알려진 스팸 발신 IP",
-    "피싱 활동 IP",
-    "악성코드 유포 IP",
-    "봇넷 연관 IP",
-    "랜섬웨어 유포 IP"
-  ];
-
-  private readonly SURBL_THREATS = [
-    "스팸 메일 도메인",
-    "피싱 사이트 도메인",
-    "악성코드 유포 도메인",
-    "사기 쇼핑몰 도메인"
-  ];
 
   constructor() {
     this.apiKey = process.env.URLHAUS_API_KEY || '';
@@ -46,36 +32,6 @@ export class DomainAnalysisService {
     if (issues.some(issue => issue.severity === 'high')) return 'danger';
     if (issues.some(issue => issue.severity === 'medium')) return 'warning';
     return 'safe';
-  }
-
-  // DNS 블랙리스트 체크를 시뮬레이션
-  private simulateDNSBLCheck(): string[] {
-    const threatCount = Math.floor(Math.random() * 3); // 0-2개의 위협 탐지
-    const threats: string[] = [];
-
-    for(let i = 0; i < threatCount; i++) {
-      const randomThreat = this.DNSBL_THREATS[Math.floor(Math.random() * this.DNSBL_THREATS.length)];
-      if (!threats.includes(randomThreat)) {
-        threats.push(randomThreat);
-      }
-    }
-
-    return threats;
-  }
-
-  // SURBL 체크를 시뮬레이션
-  private simulateSURBLCheck(): string[] {
-    const threatCount = Math.floor(Math.random() * 2); // 0-1개의 위협 탐지
-    const threats: string[] = [];
-
-    for(let i = 0; i < threatCount; i++) {
-      const randomThreat = this.SURBL_THREATS[Math.floor(Math.random() * this.SURBL_THREATS.length)];
-      if (!threats.includes(randomThreat)) {
-        threats.push(randomThreat);
-      }
-    }
-
-    return threats;
   }
 
   private async checkURLhaus(url: string): Promise<ApiResponse<URLHausResponse>> {
@@ -128,8 +84,12 @@ export class DomainAnalysisService {
       if (!response.ok) throw new Error('Certificate lookup failed');
 
       const certData = await response.json();
-      if (certData.length > 0) {
-        const latestCert = certData[0];
+      if (Array.isArray(certData) && certData.length > 0) {
+        // crt.sh 는 과거 인증서까지 모두 반환하므로, 만료일이 가장 늦은 것을 고른다.
+        // (certData[0] 을 그냥 쓰면 오래전 만료된 인증서를 보고 오탐할 수 있다)
+        const latestCert = certData.reduce((latest: any, cur: any) =>
+          new Date(cur.not_after) > new Date(latest.not_after) ? cur : latest
+        );
         const now = new Date();
         const validTo = new Date(latestCert.not_after);
 
@@ -140,15 +100,12 @@ export class DomainAnalysisService {
           isValid: validTo > now
         };
       }
-      throw new Error('No certificate found');
+      // 인증서를 못 찾음: 무효로 '단정'하지 않는다(조회 한계일 수 있음).
+      return { issuer: 'Unknown (조회 결과 없음)', validFrom: '', validTo: '', isValid: true };
     } catch (error) {
       console.error('SSL check failed:', error);
-      return {
-        issuer: 'Unknown',
-        validFrom: '',
-        validTo: '',
-        isValid: false
-      };
+      // 조회 실패 → 무효로 단정하면 정상 사이트를 오탐한다. fail-open.
+      return { issuer: 'Unknown (조회 실패)', validFrom: '', validTo: '', isValid: true };
     }
   }
 
@@ -156,15 +113,13 @@ export class DomainAnalysisService {
     try {
       const domain = new URL(url).hostname;
 
-      const [urlhausResult, safeBrowsingResult, sslResult] = await Promise.all([
+      const [urlhausResult, safeBrowsingResult, sslResult, dnsblResult, surblResult] = await Promise.all([
         this.checkURLhaus(url),
         this.checkSafeBrowsing(url),
-        this.checkSSLCertificate(domain)
+        this.checkSSLCertificate(domain),
+        checkDnsbl(domain),   // 실제 DoH 기반 조회 (이전 랜덤 시뮬레이션 제거됨)
+        checkSurbl(domain)
       ]);
-
-      // DNS 블랙리스트/SURBL 시뮬레이션 결과
-      const dnsblThreats = this.simulateDNSBLCheck();
-      const surblThreats = this.simulateSURBLCheck();
 
       return {
         urlhaus: {
@@ -178,14 +133,8 @@ export class DomainAnalysisService {
               (safeBrowsingResult.data?.matches?.map(m => m.threatType) ?? []) : []
         },
         ssl: sslResult,
-        dnsbl: {
-          isListed: dnsblThreats.length > 0,
-          listedOn: dnsblThreats
-        },
-        surbl: {
-          isListed: surblThreats.length > 0,
-          listedOn: surblThreats
-        }
+        dnsbl: dnsblResult,
+        surbl: surblResult
       };
     } catch (error) {
       console.error('Domain analysis failed:', error);

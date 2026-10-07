@@ -64,7 +64,7 @@ async function createNotification(issues: JSIssue[]) {
 
   chrome.notifications.create({
     type: 'basic',
-    iconUrl: '/icons/warning-icon.png',
+    iconUrl: '/icons/danger-icon.png',
     title: '보안 위험 감지',
     message: `${issues.length}개의 의심스러운 동작이 감지되었습니다.`
   });

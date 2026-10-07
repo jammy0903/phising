@@ -20,6 +20,10 @@ export class CompanyService {
     }
 
     private async initDB(): Promise<void> {
+        // indexedDB 가 없는 환경(서비스워커 일부/테스트 등)에서는 캐시 없이 동작한다.
+        if (typeof indexedDB === 'undefined') {
+            return;
+        }
         return new Promise((resolve, reject) => {
             const request = indexedDB.open(CompanyService.DB_NAME, 1);
 
