@@ -1,7 +1,7 @@
 import React from 'react';
 import {  AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 import { DetailResult } from '@utils/api/types';
-type Status = 'safe' | 'warning' | 'danger';
+import { gradeIssues, worseStatus, Status } from '@utils/grade';
 
 interface ResultCardProps {
     title: string;
@@ -55,6 +55,16 @@ const ResultCard: React.FC<ResultCardProps> = ({ title, status, details, issues 
 };
 
 export const AnalysisPage: React.FC<{ result: DetailResult }> = ({ result }) => {
+    // 섹션별 등급을 개수가 아닌 '심각도' 기준으로 산출(종합 판정과 일관)
+    const urlIssues = result.issues.filter((i) => i.source === 'url');
+    const companyIssues = result.issues.filter((i) => i.source === 'company');
+    const urlStatus = worseStatus(
+        gradeIssues(urlIssues).status,
+        result.analysisDetails.urlAnalysis.status === 'malicious' ? 'danger' : 'safe'
+    );
+    const companyStatus = gradeIssues(companyIssues).status;
+    const jsStatus = gradeIssues(result.analysisDetails.jsAnalysis.issues).status;
+
     return (
         <div className="container mx-auto p-4 max-w-4xl">
             <div className="flex items-center justify-between mb-6">
@@ -68,7 +78,7 @@ export const AnalysisPage: React.FC<{ result: DetailResult }> = ({ result }) => 
                     <h2 className="text-xl font-semibold mb-3">URL 분석</h2>
                     <ResultCard
                         title="URL 평판"
-                        status={result.analysisDetails.urlAnalysis.status === 'malicious' ? 'danger' : 'safe'}
+                        status={urlStatus}
                         details={`위협 유형: ${result.analysisDetails.urlAnalysis.threat || '없음'}`}
                         issues={result.analysisDetails.urlAnalysis.issues}
                     />
@@ -80,7 +90,7 @@ export const AnalysisPage: React.FC<{ result: DetailResult }> = ({ result }) => 
                         <h2 className="text-xl font-semibold mb-3">사업자 정보</h2>
                         <ResultCard
                             title="사업자 상태"
-                            status={result.analysisDetails.companyInfo.issues.length > 0 ? 'danger' : 'safe'}
+                            status={companyStatus}
                             details={`사업자 상태: ${result.analysisDetails.companyInfo.businessStatus}`}
                             issues={result.analysisDetails.companyInfo.issues}
                         />
@@ -92,7 +102,7 @@ export const AnalysisPage: React.FC<{ result: DetailResult }> = ({ result }) => 
                     <h2 className="text-xl font-semibold mb-3">JavaScript 분석</h2>
                     <ResultCard
                         title="스크립트 검사"
-                        status={result.analysisDetails.jsAnalysis.issues.length > 0 ? 'warning' : 'safe'}
+                        status={jsStatus}
                         details="악성 스크립트 패턴 검사 결과"
                         issues={result.analysisDetails.jsAnalysis.issues.map(issue => issue.description)}
                     />
