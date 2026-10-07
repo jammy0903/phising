@@ -133,13 +133,17 @@ async function recompute(tabId: number) {
 
 // 탭 상태 전체 초기화
 async function clearTabState(tabId: number) {
-  const { urlIssues, jsIssues, networkIssues, lastAnalysisResults, notifiedTabs } =
-    await chrome.storage.local.get(['urlIssues', 'jsIssues', 'networkIssues', 'lastAnalysisResults', 'notifiedTabs']);
-
-  for (const store of [urlIssues, jsIssues, networkIssues, lastAnalysisResults, notifiedTabs]) {
-    if (store) delete store[tabId];
+  const stored = await chrome.storage.local.get(
+    ['urlIssues', 'jsIssues', 'networkIssues', 'lastAnalysisResults', 'detailResults', 'notifiedTabs']
+  );
+  const keys = ['urlIssues', 'jsIssues', 'networkIssues', 'lastAnalysisResults', 'detailResults', 'notifiedTabs'] as const;
+  const next: Record<string, Record<string, unknown>> = {};
+  for (const key of keys) {
+    const store = (stored[key] || {}) as Record<string, unknown>;
+    delete store[tabId];
+    next[key] = store;
   }
-  await chrome.storage.local.set({ urlIssues, jsIssues, networkIssues, lastAnalysisResults, notifiedTabs });
+  await chrome.storage.local.set(next);
   chrome.action.setBadgeText({ tabId, text: '' }).catch(() => {});
 }
 

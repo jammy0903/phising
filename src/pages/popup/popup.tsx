@@ -70,6 +70,7 @@ const ReportButton = () => {
 // 팝업 UI 컴포넌트
 const PopupUI = () => {
   const [currentUrl, setCurrentUrl] = useState<string | null>(null);
+  const [currentTabId, setCurrentTabId] = useState<number | null>(null);
   const [analysisResult, setAnalysisResult] = useState<DetailResult | null>(null);
   // background 가 모은 병합 결과(URL 휴리스틱 + JS 분석 + 네트워크 모니터링)
   const [bgIssues, setBgIssues] = useState<JSIssue[]>([]);
@@ -102,6 +103,7 @@ const PopupUI = () => {
       }
 
       setCurrentUrl(tab.url);
+      setCurrentTabId(tab.id ?? null);
 
       // chrome:// URL 확인
       if (tab.url.startsWith('chrome://')) {
@@ -140,7 +142,37 @@ const PopupUI = () => {
       });
 
       const analysis = await analysisService.analyzeURL(tab.url, result);
-      setAnalysisResult(analysis);
+
+      // background 상시수집 이슈(URL 휴리스틱/네트워크 등)를 심층분석 결과에 병합
+      let storedBg: JSIssue[] = [];
+      if (tab.id != null) {
+        try {
+          const { lastAnalysisResults } = await chrome.storage.local.get('lastAnalysisResults');
+          storedBg = (lastAnalysisResults && lastAnalysisResults[tab.id]) || [];
+        } catch { /* 무시 */ }
+      }
+      const mergedJs = [...analysis.analysisDetails.jsAnalysis.issues, ...storedBg];
+      const combinedStatus = gradeIssues([...analysis.issues, ...storedBg]).status;
+      const detail: DetailResult = {
+        ...analysis,
+        status: combinedStatus,
+        analysisDetails: {
+          ...analysis.analysisDetails,
+          jsAnalysis: { ...analysis.analysisDetails.jsAnalysis, issues: mergedJs },
+        },
+      };
+
+      setAnalysisResult(detail);
+
+      // 상세 페이지(새 탭)가 읽을 수 있도록 탭별로 저장
+      if (tab.id != null) {
+        try {
+          const { detailResults } = await chrome.storage.local.get('detailResults');
+          await chrome.storage.local.set({
+            detailResults: { ...(detailResults || {}), [tab.id]: detail },
+          });
+        } catch { /* 무시 */ }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '분석 중 오류가 발생했습니다');
     } finally {
@@ -285,10 +317,13 @@ const PopupUI = () => {
         {/* Detailed Analysis Button */}
         <div className="space-y-2">  {/* 버튼들을 감싸는 컨테이너 */}
           <button
-              onClick={() => chrome.tabs.create({
-                url: chrome.runtime.getURL(chrome.runtime.getManifest().analysis_page as string)
-              })}
-              className="mt-2 w-full p-2 rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 text-white font-medium hover:from-blue-600 hover:to-blue-700"
+              onClick={() => {
+                const base = chrome.runtime.getURL(analysisPath);
+                const url = currentTabId != null ? `${base}?tabId=${currentTabId}` : base;
+                chrome.tabs.create({ url });
+              }}
+              disabled={!analysisResult}
+              className="mt-2 w-full p-2 rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 text-white font-medium hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             자세히 보기
           </button>
