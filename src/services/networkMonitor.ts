@@ -8,27 +8,14 @@
 // 넓은 host_permissions(*://*/*) 가 있어야 리스너가 요청을 볼 수 있다.
 
 import { JSIssue } from '@utils/api/types';
+// 등록가능도메인(eTLD+1)은 Public Suffix List 기반 공용 util 을 쓴다.
+import { registrableDomain } from '@utils/domain';
+
+export { registrableDomain };
 
 export interface NetworkFinding {
   tabId: number;
   issue: JSIssue;
-}
-
-// 등록가능도메인(eTLD+1) 비교용 — 흔한 2단계 ccTLD 목록
-const TWO_LEVEL_TLDS = new Set<string>([
-  'co.kr', 'ne.kr', 'or.kr', 'go.kr', 're.kr', 'pe.kr',
-  'co.uk', 'org.uk', 'gov.uk', 'ac.uk',
-  'co.jp', 'or.jp', 'ne.jp', 'go.jp',
-  'com.cn', 'net.cn', 'org.cn', 'com.au', 'com.br', 'com.tw',
-]);
-
-// hostname → 등록가능도메인(근사치). 라이브러리 없이 마지막 2~3라벨로 추정.
-export function registrableDomain(host: string): string {
-  const parts = host.toLowerCase().split('.').filter(Boolean);
-  if (parts.length <= 2) return parts.join('.');
-  const last2 = parts.slice(-2).join('.');
-  if (TWO_LEVEL_TLDS.has(last2)) return parts.slice(-3).join('.');
-  return last2;
 }
 
 // 요청 본문에서 자격증명으로 보이는 흔적을 찾는다.

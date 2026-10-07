@@ -41,12 +41,14 @@ export class DomainAnalysisService {
       return { success: false, error: 'URLHAUS_API_KEY 미설정 — 조회 건너뜀' };
     }
     try {
+      // URLhaus 는 JSON 이 아니라 application/x-www-form-urlencoded(`url=...`)를 받는다.
       return await makeRequest<URLHausResponse>(API_CONFIG.URLHAUSENDPOINT, {
         method: 'POST',
         headers: {
           'Auth-Key': this.apiKey,
+          'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: JSON.stringify({url})
+        body: `url=${encodeURIComponent(url)}`
       });
     } catch (error) {
       console.error('URLhaus check failed:', error);
@@ -132,8 +134,11 @@ export class DomainAnalysisService {
 
       return {
         urlhaus: {
-          isMalicious: urlhausResult.success && urlhausResult.data?.query_status === 'listed',
-          threatType: urlhausResult.success ? urlhausResult.data?.threat : undefined
+          // URLhaus 는 등재 시 query_status='ok', 미등재 시 'no_results' 를 반환한다.
+          isMalicious: urlhausResult.success && urlhausResult.data?.query_status === 'ok',
+          threatType: urlhausResult.success
+            ? (urlhausResult.data?.url_info?.threat ?? urlhausResult.data?.threat)
+            : undefined
         },
         safeBrowsing: {
           isMalicious: safeBrowsingResult.success &&

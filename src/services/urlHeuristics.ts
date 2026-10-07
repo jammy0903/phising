@@ -5,7 +5,7 @@
 // 원시 IP 호스트, userinfo(@) 혼동 등. 각 신호를 점수로 환산하고 JSIssue 로 보고한다.
 
 import { JSIssue } from '@utils/api/types';
-import { registrableDomain } from './networkMonitor';
+import { registrableDomain } from '@utils/domain';
 
 export interface UrlHeuristicResult {
   score: number;

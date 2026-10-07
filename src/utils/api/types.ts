@@ -77,6 +77,8 @@ export interface URLHausResponse {
     url_info: {
         url: string;
         status: string;
+        url_status?: string;
+        threat?: string;
     }
     query_status: string;
     threat?: string;
