@@ -5,6 +5,7 @@ import { tempDataService } from '@services/tempDataService';
 import { analysisService } from '@services/analysisService';
 import { DetailResult, TempEmailData, TempPhoneData, JSIssue, Severity } from '@utils/api/types';
 import { gradeIssues } from '@utils/grade';
+import { findBusinessNumbers } from '@utils/businessNumber';
 
 // 상태 뱃지 컴포넌트
 const StatusBadge = ({ type }: { type: 'safe' | 'warning' | 'danger' }) => {
@@ -141,7 +142,9 @@ const PopupUI = () => {
         func: () => document.documentElement.innerHTML,
       });
 
-      const analysis = await analysisService.analyzeURL(tab.url, result);
+      // 페이지 HTML 에서 사업자등록번호를 추출해 NTS 상태조회까지 수행
+      const businessNumber = findBusinessNumbers(result)[0];
+      const analysis = await analysisService.analyzeURL(tab.url, result, businessNumber);
 
       // background 상시수집 이슈(URL 휴리스틱/네트워크 등)를 심층분석 결과에 병합
       let storedBg: JSIssue[] = [];
