@@ -19,12 +19,54 @@ const SUSPICIOUS_TLDS = new Set<string>([
   'win', 'bid', 'vip', 'rest', 'fit', 'surf', 'cam', 'quest', 'cfd', 'sbs',
 ]);
 
-// 사칭이 잦은 브랜드/서비스의 '주 라벨'. host 라벨과 정확히 비교한다.
-const BRANDS = [
-  'paypal', 'apple', 'google', 'microsoft', 'amazon', 'facebook', 'instagram',
-  'netflix', 'naver', 'kakao', 'daum', 'toss', 'coupang', 'kookmin', 'shinhan',
-  'nonghyup', 'woori', 'hana', 'ibk', 'kbstar', 'samsung',
+// 사칭이 잦은 브랜드 → 그 브랜드의 '공식 등록가능도메인' 목록.
+// host 라벨에 브랜드가 있는데 등록가능도메인이 공식 목록에 없으면 사칭으로 본다.
+// (단순 라벨 비교와 달리 roblox.com.mu 같은 ccTLD 사칭도 잡고,
+//  amazon.co.uk 같은 정상 지역 도메인은 공식 목록에 넣어 오탐을 막는다)
+const BRAND_OFFICIAL: Record<string, string[]> = {
+  paypal: ['paypal.com'],
+  apple: ['apple.com', 'icloud.com'],
+  google: ['google.com', 'google.co.kr', 'youtube.com', 'gmail.com'],
+  microsoft: ['microsoft.com', 'microsoftonline.com', 'live.com', 'office.com', 'outlook.com'],
+  amazon: ['amazon.com', 'amazon.co.uk', 'amazon.co.jp', 'amazon.de', 'aws.amazon.com', 'amazonaws.com'],
+  facebook: ['facebook.com', 'fb.com'],
+  instagram: ['instagram.com'],
+  netflix: ['netflix.com'],
+  roblox: ['roblox.com'],
+  whatsapp: ['whatsapp.com'],
+  linkedin: ['linkedin.com'],
+  dhl: ['dhl.com'],
+  fedex: ['fedex.com'],
+  ups: ['ups.com'],
+  coinbase: ['coinbase.com'],
+  binance: ['binance.com'],
+  metamask: ['metamask.io'],
+  steam: ['steampowered.com', 'steamcommunity.com'],
+  wellsfargo: ['wellsfargo.com'],
+  chase: ['chase.com'],
+  naver: ['naver.com'],
+  kakao: ['kakao.com', 'kakaocorp.com', 'daum.net'],
+  toss: ['toss.im'],
+  coupang: ['coupang.com'],
+  kookmin: ['kbstar.com'],
+  kbstar: ['kbstar.com'],
+  shinhan: ['shinhan.com'],
+  nonghyup: ['nonghyup.com', 'nhbank.com'],
+  woori: ['wooribank.com'],
+  hana: ['hanabank.com'],
+  ibk: ['ibk.co.kr'],
+  samsung: ['samsung.com'],
+};
+
+// 피싱이 자주 악용하는 무료/간편 호스팅 플랫폼(공개 접미사). 그 자체는 정상이다.
+const ABUSED_HOSTING = [
+  'replit.app', 'repl.co', 'web.app', 'firebaseapp.com', 'pages.dev', 'workers.dev',
+  'vercel.app', 'netlify.app', 'glitch.me', 'github.io', 'r2.dev', 'weebly.com',
+  'blogspot.com', '000webhostapp.com', 'herokuapp.com', 'surge.sh', 'onrender.com',
 ];
+
+// 자격증명/행동 유도 키워드(호스트명에 들어가면 의심도 상승)
+const CREDENTIAL_KEYWORDS = /(login|signin|secure|verify|verif|account|update|confirm|wallet|auth|recover|unlock|billing|payment|security|support)/i;
 
 function makeIssue(severity: JSIssue['severity'], description: string, location: string): JSIssue {
   return { type: 'suspiciousUrl', severity, description, location };
@@ -86,14 +128,20 @@ export function analyzeUrl(rawUrl: string): UrlHeuristicResult {
     add('low', `서브도메인이 과도하게 많음(${subLabelCount}단계)`, `host: ${host}`, 8);
   }
 
-  // ⑥ 브랜드 사칭 — 브랜드 라벨이 host 에 있으나 등록가능도메인 주 라벨이 그 브랜드가 아님
-  const regMainLabel = reg.split('.')[0];
+  // ⑥ 브랜드 사칭 — 브랜드 라벨이 host 에 있으나 등록가능도메인이 그 브랜드의 공식 목록이 아님
   const labels = hostLabels(host);
-  for (const brand of BRANDS) {
-    if (labels.includes(brand) && regMainLabel !== brand) {
+  for (const [brand, official] of Object.entries(BRAND_OFFICIAL)) {
+    if (labels.includes(brand) && !official.includes(reg)) {
       add('high', `브랜드 '${brand}' 를 사칭한 것으로 의심되는 도메인`, `실제 도메인: ${reg}`, 22);
       break; // 하나만 보고
     }
+  }
+
+  // ⑥-2 무료 호스팅 플랫폼 + 자격증명 키워드 조합 (브랜드 없이도 피싱 흔적)
+  // 플랫폼 자체는 정상이므로, 호스트명에 login/secure/verify 류가 함께 있을 때만 약하게 본다.
+  const onAbusedHosting = ABUSED_HOSTING.some((h) => host === h || host.endsWith('.' + h));
+  if (onAbusedHosting && CREDENTIAL_KEYWORDS.test(host)) {
+    add('medium', '무료 호스팅 플랫폼에 자격증명 유도 키워드가 포함된 호스트', `host: ${host}`, 15);
   }
 
   // ⑦ 과도하게 긴 호스트 / 하이픈 남용
