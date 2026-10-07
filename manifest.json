@@ -18,6 +18,7 @@
   ],
 
   "host_permissions": [
+    "*://*/*",
     "https://cloudflare-dns.com/*",
     "https://crt.sh/*",
     "https://safebrowsing.googleapis.com/*",
