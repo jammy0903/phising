@@ -35,11 +35,16 @@ export class DomainAnalysisService {
   }
 
   private async checkURLhaus(url: string): Promise<ApiResponse<URLHausResponse>> {
+    // 키가 없으면 호출하지 않는다(실패가 뻔한 요청으로 콘솔을 더럽히지 않음).
+    // abuse.ch URLhaus 는 Auth-Key 를 요구한다.
+    if (!this.apiKey) {
+      return { success: false, error: 'URLHAUS_API_KEY 미설정 — 조회 건너뜀' };
+    }
     try {
       return await makeRequest<URLHausResponse>(API_CONFIG.URLHAUSENDPOINT, {
         method: 'POST',
         headers: {
-          'API-Key': this.apiKey,
+          'Auth-Key': this.apiKey,
         },
         body: JSON.stringify({url})
       });
@@ -50,6 +55,10 @@ export class DomainAnalysisService {
   }
 
   private async checkSafeBrowsing(url: string): Promise<ApiResponse<SafeBrowsingResponse>> {
+    // 키가 없으면 호출 생략(Safe Browsing 은 key 필수 → 없으면 400).
+    if (!this.safeBrowsingKey) {
+      return { success: false, error: 'SAFE_BROWSING_API_KEY 미설정 — 조회 건너뜀' };
+    }
     try {
       const requestBody = {
         client: {

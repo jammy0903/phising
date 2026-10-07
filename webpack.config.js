@@ -196,7 +196,9 @@ module.exports = {
     }),
     new Dotenv({
       systemvars: true,
-      safe: true,
+      // safe:false — .env 가 없어도(키 미설정) 빌드가 깨지지 않게 한다.
+      // 키가 없으면 각 서비스가 해당 조회를 건너뛴다(graceful degradation).
+      safe: false,
       silent: true,
     }),
     new webpack.ProvidePlugin({

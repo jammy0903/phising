@@ -3,7 +3,8 @@ import { AlertCircle, Shield, Mail, Phone, RefreshCcw } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
 import { tempDataService } from '@services/tempDataService';
 import { analysisService } from '@services/analysisService';
-import { DetailResult, TempEmailData, TempPhoneData, } from '@utils/api/types';
+import { DetailResult, TempEmailData, TempPhoneData, JSIssue, Severity } from '@utils/api/types';
+import { gradeIssues } from '@utils/grade';
 
 // 상태 뱃지 컴포넌트
 const StatusBadge = ({ type }: { type: 'safe' | 'warning' | 'danger' }) => {
@@ -70,6 +71,8 @@ const ReportButton = () => {
 const PopupUI = () => {
   const [currentUrl, setCurrentUrl] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<DetailResult | null>(null);
+  // background 가 모은 병합 결과(URL 휴리스틱 + JS 분석 + 네트워크 모니터링)
+  const [bgIssues, setBgIssues] = useState<JSIssue[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tempEmail, setTempEmail] = useState<TempEmailData | null>(null);
@@ -120,6 +123,16 @@ const PopupUI = () => {
     try {
       const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
       if (!tab.url) throw new Error('URL not found');
+
+      // background 가 모아둔 병합 결과(수동 분석과 별개로 상시 수집됨)를 먼저 읽는다
+      if (tab.id != null) {
+        try {
+          const { lastAnalysisResults } = await chrome.storage.local.get('lastAnalysisResults');
+          setBgIssues((lastAnalysisResults && lastAnalysisResults[tab.id]) || []);
+        } catch {
+          /* 스토리지 접근 실패는 무시 */
+        }
+      }
 
       const [{result}] = await chrome.scripting.executeScript({
         target: {tabId: tab.id!},
@@ -179,6 +192,18 @@ const PopupUI = () => {
     return descriptions[type as keyof typeof descriptions]?.[status] || '분석 결과를 확인하세요';
   };
 
+  // 수동 심층분석(analysisResult)과 background 상시수집(bgIssues)을 합쳐 종합 등급 산출
+  const combinedIssues: ReadonlyArray<{ severity: Severity; description: string }> = [
+    ...((analysisResult?.issues ?? []) as { severity: Severity; description: string }[]),
+    ...bgIssues.map((i) => ({ severity: i.severity, description: i.description })),
+  ];
+  const overall = gradeIssues(combinedIssues);
+  const sevDot: Record<Severity, string> = {
+    high: 'bg-red-500',
+    medium: 'bg-yellow-500',
+    low: 'bg-gray-400',
+  };
+
   return (
       <div className="w-80 p-4 flex flex-col gap-4 bg-white">
         {/* Header */}
@@ -203,24 +228,31 @@ const PopupUI = () => {
             </Alert>
         )}
 
-        {/* Analysis Results */}
-        {analysisResult && (
-            <div className="grid grid-cols-2 gap-3">
-              <ResultCard
-                  title="URL"
-                  status={analysisResult.analysisDetails.urlAnalysis.status === 'malicious' ? 'danger' : 'safe'}
-                  description={getStatusDescription('URL', analysisResult.status)}
-              />
-              <ResultCard
-                  title="행동"
-                  status={analysisResult.analysisDetails.jsAnalysis.issues.length > 0 ? 'danger' : 'safe'}
-                  description={getStatusDescription('JS', analysisResult.status)}
-              />
-              <ResultCard
-                  title="사업자"
-                  status={analysisResult.analysisDetails.companyInfo.issues.length > 0 ? 'warning' : 'safe'}
-                  description={getStatusDescription('Company', analysisResult.status)}
-              />
+        {/* 종합 판정 — URL 휴리스틱 + JS 분석 + 네트워크 모니터링 + 심층분석 병합 */}
+        {!loading && !error && (
+            <div className="p-3 rounded-xl bg-gradient-to-br from-white to-gray-50 border shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-semibold">종합 판정</span>
+                <StatusBadge type={overall.status} />
+              </div>
+              <div className="text-xs text-gray-600 mb-2">
+                위험 {overall.high} · 주의 {overall.medium} · 참고 {overall.low}
+              </div>
+              {combinedIssues.length === 0 ? (
+                  <p className="text-xs text-gray-500">특이 신호가 감지되지 않았습니다.</p>
+              ) : (
+                  <ul className="space-y-1 max-h-40 overflow-auto">
+                    {combinedIssues.slice(0, 10).map((issue, idx) => (
+                        <li key={idx} className="flex items-start gap-2 text-xs text-gray-700">
+                          <span className={`mt-1 w-2 h-2 rounded-full shrink-0 ${sevDot[issue.severity]}`}></span>
+                          <span>{issue.description}</span>
+                        </li>
+                    ))}
+                    {combinedIssues.length > 10 && (
+                        <li className="text-xs text-gray-400">… 외 {combinedIssues.length - 10}건</li>
+                    )}
+                  </ul>
+              )}
             </div>
         )}
 
