@@ -58,11 +58,14 @@ const BRAND_OFFICIAL: Record<string, string[]> = {
   samsung: ['samsung.com'],
 };
 
-// 피싱이 자주 악용하는 무료/간편 호스팅 플랫폼(공개 접미사). 그 자체는 정상이다.
+// 피싱이 자주 악용하는 무료/간편 호스팅·동적 DNS 플랫폼(공개 접미사). 그 자체는 정상이다.
 const ABUSED_HOSTING = [
   'replit.app', 'repl.co', 'web.app', 'firebaseapp.com', 'pages.dev', 'workers.dev',
   'vercel.app', 'netlify.app', 'glitch.me', 'github.io', 'r2.dev', 'weebly.com',
   'blogspot.com', '000webhostapp.com', 'herokuapp.com', 'surge.sh', 'onrender.com',
+  'godaddysites.com', 'framer.app', 'framer.website', 'edgeone.dev', 'edgeone.app',
+  'duckdns.org', 'ddns.net', 'no-ip.com', 'myftp.org', 'serveo.net', 'ngrok.io',
+  'ngrok-free.app', 'trycloudflare.com', 'glitch.com', 'canva.site', 'wixsite.com',
 ];
 
 // 자격증명/행동 유도 키워드(호스트명에 들어가면 의심도 상승)
@@ -70,6 +73,11 @@ const CREDENTIAL_KEYWORDS = /(login|signin|secure|verify|verif|account|update|co
 
 function makeIssue(severity: JSIssue['severity'], description: string, location: string): JSIssue {
   return { type: 'suspiciousUrl', severity, description, location };
+}
+
+// 경로의 %인코딩을 최대한 풀어 키워드/브랜드 탐지에 쓴다(깨지면 원본 반환).
+function decodeURIComponentSafe(s: string): string {
+  try { return decodeURIComponent(s); } catch { return s; }
 }
 
 // 호스트를 라벨 단위로 분해(점/하이픈 기준)해 브랜드 라벨 비교에 쓴다.
@@ -137,11 +145,18 @@ export function analyzeUrl(rawUrl: string): UrlHeuristicResult {
     }
   }
 
-  // ⑥-2 무료 호스팅 플랫폼 + 자격증명 키워드 조합 (브랜드 없이도 피싱 흔적)
-  // 플랫폼 자체는 정상이므로, 호스트명에 login/secure/verify 류가 함께 있을 때만 약하게 본다.
+  // ⑥-2 무료 호스팅 플랫폼에서는 '호스트+경로'를 함께 스캔한다.
+  // 이런 플랫폼의 피싱은 브랜드·키워드를 보통 경로에 둔다(예: user.github.io/Amazon-Clone).
+  // 플랫폼 자체는 정상이므로 브랜드/자격증명 키워드가 함께 있을 때만 medium 으로 본다.
   const onAbusedHosting = ABUSED_HOSTING.some((h) => host === h || host.endsWith('.' + h));
-  if (onAbusedHosting && CREDENTIAL_KEYWORDS.test(host)) {
-    add('medium', '무료 호스팅 플랫폼에 자격증명 유도 키워드가 포함된 호스트', `host: ${host}`, 15);
+  if (onAbusedHosting) {
+    const haystack = (host + ' ' + decodeURIComponentSafe(u.pathname)).toLowerCase();
+    const brandHit = Object.keys(BRAND_OFFICIAL).find((b) => new RegExp(`(^|[^a-z])${b}([^a-z]|$)`, 'i').test(haystack));
+    if (brandHit) {
+      add('medium', `무료 호스팅에 브랜드 '${brandHit}' 흔적 — 사칭 페이지 의심`, `host/path: ${host}${u.pathname.slice(0, 40)}`, 18);
+    } else if (CREDENTIAL_KEYWORDS.test(haystack)) {
+      add('medium', '무료 호스팅에 자격증명 유도 키워드 포함', `host/path: ${host}${u.pathname.slice(0, 40)}`, 15);
+    }
   }
 
   // ⑦ 과도하게 긴 호스트 / 하이픈 남용
